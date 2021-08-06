@@ -1,12 +1,12 @@
 # terminal_chat
 use terminal windows to chat in a particular room on a particular port
 
-#Compile
+# Compile
 >make chat
 
-#Run server
+# Run server
 >./server PORT
 
-#Run client
+# Run client
 >./client PORT
 
