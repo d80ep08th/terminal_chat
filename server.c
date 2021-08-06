@@ -10,8 +10,10 @@
 #include <sys/types.h>
 #include <signal.h>
 
-#define MAX_CLIENTS 100
-#define BUFFER_SZ 2048
+#define MAX_CLIENTS 100  //make this 1000
+#define BUFFER_SZ1 2048
+//#define BUFFER_SZ2 2048
+
 
 static _Atomic unsigned int cli_count = 0;
 static int uid = 10;
@@ -101,8 +103,11 @@ void send_message(char *s, int uid){
 
 /* Handle all communication with the client */
 void *handle_client(void *arg){
-	char buff_out[BUFFER_SZ];
+	char buff_out[BUFFER_SZ1];
+	//char buff_out_pro[BUFFER_SZ1+32];
 	char name[32];
+	//char message_[BUFFER_SZ1];
+	//char nl = "/n";
 	int leave_flag = 0;
 
 	cli_count++;
@@ -119,20 +124,35 @@ void *handle_client(void *arg){
 		send_message(buff_out, cli->uid);
 	}
 
-	bzero(buff_out, BUFFER_SZ);
+	//Erases the data in buff_out
+	bzero(buff_out, BUFFER_SZ1);
 
-	while(1){
+	while(1){   //so that it keeps spinning for every thread in the server spinner
 		if (leave_flag) {
 			break;
 		}
 
-		int receive = recv(cli->sockfd, buff_out, BUFFER_SZ, 0);
+		int receive = recv(cli->sockfd, buff_out, BUFFER_SZ1, 0);  //recieves any changes from clients
 		if (receive > 0){
 			if(strlen(buff_out) > 0){
+				//strcpy(buff_out, message_);
+				//bzero(buff_out, BUFFER_SZ1);
+				//message_ = buff_out;
+				//sprintf(message_, "%s:", cli->name);
+				//bzero(buff_out, BUFFER_SZ1);
+				//sprintf(message_, " %s", buff_out);
+				//sprintf(message_, "%s", nl);
+
+				send_message(cli->name, cli->uid);
+				send_message(": ", cli->uid);
 				send_message(buff_out, cli->uid);
+				send_message("\n", cli->uid);
+			  //send_message(buff_out_pro, cli->uid);
 
 				str_trim_lf(buff_out, strlen(buff_out));
-				printf("%s -> %s\n", buff_out, cli->name);
+				printf("%s: ", cli->name);
+				printf("%s\n", buff_out);
+
 			}
 		} else if (receive == 0 || strcmp(buff_out, "exit") == 0){
 			sprintf(buff_out, "%s has left\n", cli->name);
@@ -144,7 +164,7 @@ void *handle_client(void *arg){
 			leave_flag = 1;
 		}
 
-		bzero(buff_out, BUFFER_SZ);
+		bzero(buff_out, BUFFER_SZ1);
 	}
 
   /* Delete client from queue and yield thread */
@@ -163,6 +183,8 @@ int main(int argc, char **argv){
 		return EXIT_FAILURE;
 	}
 
+//  char buff_out[BUFFER_SZ2];
+//	char name[32];
 	char *ip = "127.0.0.1";
 	int port = atoi(argv[1]);
 	int option = 1;
@@ -209,7 +231,8 @@ int main(int argc, char **argv){
 			print_client_addr(cli_addr);
 			printf(":%d\n", cli_addr.sin_port);
 			close(connfd);
-			continue;
+			continue;               /* will get out of the while loop if Max clients are reached   */
+
 		}
 
 		/* Client settings */
@@ -218,7 +241,6 @@ int main(int argc, char **argv){
 		cli->sockfd = connfd;
 		cli->uid = uid++;
 
-		/* Add client to the queue and fork thread */
 		queue_add(cli);
 		pthread_create(&tid, NULL, &handle_client, (void*)cli);
 

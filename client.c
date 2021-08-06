@@ -35,11 +35,11 @@ void catch_ctrl_c_and_exit(int sig) {
     flag = 1;
 }
 
-void send_msg_handler() {
+void send_msg_handler() {                 //Send Message to the chatroom
   char message[LENGTH] = {};
 	char buffer[LENGTH + 32] = {};
 
-  while(1) {
+  while(1) {                                  //SO that it keeps spinning for every thread in every client spinner
   	str_overwrite_stdout();
     fgets(message, LENGTH, stdin);
     str_trim_lf(message, LENGTH);
@@ -47,7 +47,8 @@ void send_msg_handler() {
     if (strcmp(message, "exit") == 0) {
 			break;
     } else {
-      sprintf(buffer, "%s: %s\n", name, message);
+      sprintf(buffer, "%s:", name);
+      sprintf(buffer, "%s\n", message);
       send(sockfd, buffer, strlen(buffer), 0);
     }
 
@@ -57,11 +58,15 @@ void send_msg_handler() {
   catch_ctrl_c_and_exit(2);
 }
 
-void recv_msg_handler() {
+
+void recv_msg_handler() {                   //Recieve message from the CHATROOM
 	char message[LENGTH] = {};
-  while (1) {
+  //char message_by[32];
+
+  while (1) {                               //so that it keeps spinning for every thread in every client spinner
 		int receive = recv(sockfd, message, LENGTH, 0);
     if (receive > 0) {
+      //sprintf()
       printf("%s", message);
       str_overwrite_stdout();
     } else if (receive == 0) {
@@ -84,27 +89,30 @@ int main(int argc, char **argv){
 
 	signal(SIGINT, catch_ctrl_c_and_exit);
 
-	printf("Please enter your name: ");
-  fgets(name, 32, stdin);
-  str_trim_lf(name, strlen(name));
+	printf("JOIN {ROOMNAME} {USERNAME}: ");  //JUST ENTER THE JOIN COMMAND HERE
+  fgets(name, 32, stdin);              //which triggers the birth or inititiation in a specific room
+  //scanf("%s",name);
+
+    str_trim_lf(name, strlen(name));
 
 
-	if (strlen(name) > 32 || strlen(name) < 2){
-		printf("Name must be less than 30 and more than 2 characters.\n");
-		return EXIT_FAILURE;
-	}
+    if (strlen(name) > 32 || strlen(name) < 2 ){
+      printf("Name must be less than 30 and more than 2 characters and should start with .\n");
+      return EXIT_FAILURE;
+	   }
 
-	struct sockaddr_in server_addr;
+     struct sockaddr_in server_addr;
 
 	/* Socket settings */
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_addr(ip);
-  server_addr.sin_port = htons(port);
+      sockfd = socket(AF_INET, SOCK_STREAM, 0);
+      server_addr.sin_family = AF_INET;
+      server_addr.sin_addr.s_addr = inet_addr(ip);
+      server_addr.sin_port = htons(port);
 
 
   // Connect to Server
-  int err = connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    int err = connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
   if (err == -1) {
 		printf("ERROR: connect\n");
 		return EXIT_FAILURE;
@@ -114,14 +122,20 @@ int main(int argc, char **argv){
 	send(sockfd, name, 32, 0);
 
 	printf("=== WELCOME TO THE CHATROOM ===\n");
+  printf("%s has joined\n", name);
 
+
+  //thread to send message in the CHATROOM
 	pthread_t send_msg_thread;
+
   if(pthread_create(&send_msg_thread, NULL, (void *) send_msg_handler, NULL) != 0){
 		printf("ERROR: pthread\n");
     return EXIT_FAILURE;
 	}
 
+  //thread that recieves message from the CHATROOM
 	pthread_t recv_msg_thread;
+
   if(pthread_create(&recv_msg_thread, NULL, (void *) recv_msg_handler, NULL) != 0){
 		printf("ERROR: pthread\n");
 		return EXIT_FAILURE;
