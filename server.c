@@ -55,16 +55,18 @@ void print_client_addr(struct sockaddr_in addr){
 
 /* Add clients to queue */
 void queue_add(client_t *cl){
-	pthread_mutex_lock(&clients_mutex);
 
+
+	pthread_mutex_lock(&clients_mutex);
 	for(int i=0; i < MAX_CLIENTS; ++i){
 		if(!clients[i]){
 			clients[i] = cl;
 			break;
 		}
-	}
 
+	}
 	pthread_mutex_unlock(&clients_mutex);
+
 }
 
 /* Remove clients to queue */
@@ -103,14 +105,15 @@ void send_message(char *s, int uid){
 
 /* Handle all communication with the client */
 void *handle_client(void *arg){
+
+
+
 	char buff_out[BUFFER_SZ1];
-	//char buff_out_pro[BUFFER_SZ1+32];
 	char name[32];
-	//char message_[BUFFER_SZ1];
-	//char nl = "/n";
 	int leave_flag = 0;
 
 	cli_count++;
+
 	client_t *cli = (client_t *)arg;
 
 	// Name
@@ -123,31 +126,25 @@ void *handle_client(void *arg){
 		printf("%s", buff_out);
 		send_message(buff_out, cli->uid);
 	}
-
-	//Erases the data in buff_out
-	bzero(buff_out, BUFFER_SZ1);
+	bzero(buff_out, BUFFER_SZ1);   //Erases the data in buff_out
 
 	while(1){   //so that it keeps spinning for every thread in the server spinner
+
+
+
 		if (leave_flag) {
 			break;
 		}
 
 		int receive = recv(cli->sockfd, buff_out, BUFFER_SZ1, 0);  //recieves any changes from clients
+
 		if (receive > 0){
 			if(strlen(buff_out) > 0){
-				//strcpy(buff_out, message_);
-				//bzero(buff_out, BUFFER_SZ1);
-				//message_ = buff_out;
-				//sprintf(message_, "%s:", cli->name);
-				//bzero(buff_out, BUFFER_SZ1);
-				//sprintf(message_, " %s", buff_out);
-				//sprintf(message_, "%s", nl);
 
 				send_message(cli->name, cli->uid);
 				send_message(": ", cli->uid);
 				send_message(buff_out, cli->uid);
 				send_message("\n", cli->uid);
-			  //send_message(buff_out_pro, cli->uid);
 
 				str_trim_lf(buff_out, strlen(buff_out));
 				printf("%s: ", cli->name);
@@ -165,6 +162,7 @@ void *handle_client(void *arg){
 		}
 
 		bzero(buff_out, BUFFER_SZ1);
+
 	}
 
   /* Delete client from queue and yield thread */
@@ -178,20 +176,22 @@ void *handle_client(void *arg){
 }
 
 int main(int argc, char **argv){
+
+
 	if(argc != 2){
 		printf("Usage: %s <port>\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 
-//  char buff_out[BUFFER_SZ2];
-//	char name[32];
 	char *ip = "127.0.0.1";
 	int port = atoi(argv[1]);
 	int option = 1;
 	int listenfd = 0, connfd = 0;
-  struct sockaddr_in serv_addr;
+
+	struct sockaddr_in serv_addr;
   struct sockaddr_in cli_addr;
-  pthread_t tid;
+
+	pthread_t tid;
 
   /* Socket settings */
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -199,8 +199,9 @@ int main(int argc, char **argv){
   serv_addr.sin_addr.s_addr = inet_addr(ip);
   serv_addr.sin_port = htons(port);
 
-  /* Ignore pipe signals */
-	signal(SIGPIPE, SIG_IGN);
+
+	signal(SIGPIPE, SIG_IGN);  /* Ignore pipe signals */
+
 
 	if(setsockopt(listenfd, SOL_SOCKET,(SO_REUSEPORT | SO_REUSEADDR),(char*)&option,sizeof(option)) < 0){
 		perror("ERROR: setsockopt failed");

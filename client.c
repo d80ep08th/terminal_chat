@@ -16,7 +16,7 @@ volatile sig_atomic_t flag = 0;
 int sockfd = 0;
 char name[32];
 
-void str_overwrite_stdout() {
+void owrite_str_std_op() {
   printf("%s", "> ");
   fflush(stdout);
 }
@@ -40,7 +40,7 @@ void send_msg_handler() {                 //Send Message to the chatroom
 	char buffer[LENGTH + 32] = {};
 
   while(1) {                                  //SO that it keeps spinning for every thread in every client spinner
-  	str_overwrite_stdout();
+  	owrite_str_std_op();
     fgets(message, LENGTH, stdin);
     str_trim_lf(message, LENGTH);
 
@@ -68,7 +68,7 @@ void recv_msg_handler() {                   //Recieve message from the CHATROOM
     if (receive > 0) {
       //sprintf()
       printf("%s", message);
-      str_overwrite_stdout();
+      owrite_str_std_op();
     } else if (receive == 0) {
 			break;
     } else {
