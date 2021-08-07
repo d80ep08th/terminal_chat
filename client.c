@@ -16,23 +16,58 @@ volatile sig_atomic_t flag = 0;
 int sockfd = 0;
 char name[32];
 
-void str_overwrite_stdout() {
+void owrite_str_std_op() {
   printf("%s", "> ");
   fflush(stdout);
 }
 
+
+void catch_ctrl_c_and_exit(int sig) {
+    flag = 1;
+}
+
+
 void str_trim_lf (char* arr, int length) {
   int i;
-  for (i = 0; i < length; i++) { // trim \n
+  for (i = 0; i < length; i++) { // loop till it finds \n in the string and replace it with \0
     if (arr[i] == '\n') {
-      arr[i] = '\0';
+      arr[i] = '\0';// \0 indicates the terminaton of a character string
       break;
     }
   }
 }
 
-void catch_ctrl_c_and_exit(int sig) {
-    flag = 1;
+void validate_JOIN (char* arr, int length) {
+  int i;
+  for (i = 0; i < length; i++) { // loop till it finds "JOIN" as the first four characters in the string
+    if (arr[i] == 'J' && arr[i] == 'O' && arr[i] == 'I' && arr[i] == 'N') {
+
+      /*
+      if first four words are JOIN
+      the string after JOIN is ROOM
+          //if ROOM has no error
+                // if ROOM exists
+                      connect to chatroom ROOM
+                      as the USERNAME
+                //else
+                      create new chatroom
+                      as the USERNAME
+
+      the code for client and server works the same in a ROOM
+      but  now the server creates rooms before a client can connect
+      and  if a client is trying to connect to an existing room , then it doesnt create a room
+
+      creating a new room is same as creating a new client
+
+
+      */
+
+
+
+
+      break;
+    }
+  }
 }
 
 void send_msg_handler() {                 //Send Message to the chatroom
@@ -40,7 +75,7 @@ void send_msg_handler() {                 //Send Message to the chatroom
 	char buffer[LENGTH + 32] = {};
 
   while(1) {                                  //SO that it keeps spinning for every thread in every client spinner
-  	str_overwrite_stdout();
+  	owrite_str_std_op();
     fgets(message, LENGTH, stdin);
     str_trim_lf(message, LENGTH);
 
@@ -68,7 +103,7 @@ void recv_msg_handler() {                   //Recieve message from the CHATROOM
     if (receive > 0) {
       //sprintf()
       printf("%s", message);
-      str_overwrite_stdout();
+      owrite_str_std_op();
     } else if (receive == 0) {
 			break;
     } else {
@@ -128,25 +163,25 @@ int main(int argc, char **argv){
   //thread to send message in the CHATROOM
 	pthread_t send_msg_thread;
 
-  if(pthread_create(&send_msg_thread, NULL, (void *) send_msg_handler, NULL) != 0){
-		printf("ERROR: pthread\n");
-    return EXIT_FAILURE;
-	}
+            if(pthread_create(&send_msg_thread, NULL, (void *) send_msg_handler, NULL) != 0){
+          		printf("ERROR: pthread\n");
+              return EXIT_FAILURE;
+          	}
 
   //thread that recieves message from the CHATROOM
 	pthread_t recv_msg_thread;
 
-  if(pthread_create(&recv_msg_thread, NULL, (void *) recv_msg_handler, NULL) != 0){
-		printf("ERROR: pthread\n");
-		return EXIT_FAILURE;
-	}
+        if(pthread_create(&recv_msg_thread, NULL, (void *) recv_msg_handler, NULL) != 0){
+      		printf("ERROR: pthread\n");
+      		return EXIT_FAILURE;
+      	}
 
-	while (1){
-		if(flag){
-			printf("\nBye\n");
-			break;
-    }
-	}
+      	while (1){
+      		if(flag){
+      			printf("\nBye\n");
+      			break;
+          }
+      	}
 
 	close(sockfd);
 
