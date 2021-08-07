@@ -88,17 +88,17 @@ int next_identifier = 1; // Number we use to get a unique identifier for an inco
  */
 void client_add(client_struct *client)
 {
-    char name;
+    //char name;
     pthread_mutex_lock(&client_list_mutex);
                       for (int i = 0; i < MAX_CLIENTS; ++i)
                       {
                           if (client_list[i] == NULL) // Looking for a NULL slot
                           {
                               client_list[i] = client;
-                              strcpy(client->username, name);
+                              //strcpy(client->username, name);
                               printf("[Server] Client connected with identifier: %d and fd: %d\n", client->identifier, client->clientfd);
                               //sprintf(buff_out, "%s has joined\n", cli->name);
-                              printf("[Server] Client \"%s\" joined the server\n", buff_out);
+                              //printf("[Server] Client \"%s\" joined the server\n", buff_out);
                               num_clients++;
                               break;
                           }
