@@ -16,58 +16,23 @@ volatile sig_atomic_t flag = 0;
 int sockfd = 0;
 char name[32];
 
-void owrite_str_std_op() {
+void str_overwrite_stdout() {
   printf("%s", "> ");
   fflush(stdout);
 }
 
+void str_trim_lf (char* arr, int length) {
+  int i;
+  for (i = 0; i < length; i++) { // trim \n
+    if (arr[i] == '\n') {
+      arr[i] = '\0';
+      break;
+    }
+  }
+}
 
 void catch_ctrl_c_and_exit(int sig) {
     flag = 1;
-}
-
-
-void str_trim_lf (char* arr, int length) {
-  int i;
-  for (i = 0; i < length; i++) { // loop till it finds \n in the string and replace it with \0
-    if (arr[i] == '\n') {
-      arr[i] = '\0';// \0 indicates the terminaton of a character string
-      break;
-    }
-  }
-}
-
-void validate_JOIN (char* arr, int length) {
-  int i;
-  for (i = 0; i < length; i++) { // loop till it finds "JOIN" as the first four characters in the string
-    if (arr[i] == 'J' && arr[i] == 'O' && arr[i] == 'I' && arr[i] == 'N') {
-
-      /*
-      if first four words are JOIN
-      the string after JOIN is ROOM
-          //if ROOM has no error
-                // if ROOM exists
-                      connect to chatroom ROOM
-                      as the USERNAME
-                //else
-                      create new chatroom
-                      as the USERNAME
-
-      the code for client and server works the same in a ROOM
-      but  now the server creates rooms before a client can connect
-      and  if a client is trying to connect to an existing room , then it doesnt create a room
-
-      creating a new room is same as creating a new client
-
-
-      */
-
-
-
-
-      break;
-    }
-  }
 }
 
 void send_msg_handler() {                 //Send Message to the chatroom
@@ -75,7 +40,7 @@ void send_msg_handler() {                 //Send Message to the chatroom
 	char buffer[LENGTH + 32] = {};
 
   while(1) {                                  //SO that it keeps spinning for every thread in every client spinner
-  	owrite_str_std_op();
+  	str_overwrite_stdout();
     fgets(message, LENGTH, stdin);
     str_trim_lf(message, LENGTH);
 
@@ -103,7 +68,7 @@ void recv_msg_handler() {                   //Recieve message from the CHATROOM
     if (receive > 0) {
       //sprintf()
       printf("%s", message);
-      owrite_str_std_op();
+      str_overwrite_stdout();
     } else if (receive == 0) {
 			break;
     } else {
@@ -145,14 +110,16 @@ int main(int argc, char **argv){
       server_addr.sin_port = htons(port);
 
 
-  // Connect to Server
-    int err = connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+//printf("on %s...\n", inet_ntoa(server_addr.sin_port));
+//printf("Try connecting to %s...\n", inet_ntoa(server_addr.sin_family));
 
-  if (err == -1) {
+  // Connect to Server
+int status = connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+  if (status == -1) {
 		printf("ERROR: connect\n");
 		return EXIT_FAILURE;
 	}
-
+printf("Try connecting to %s...\n", inet_ntoa(server_addr.sin_addr));
 	// Send name
 	send(sockfd, name, 32, 0);
 
@@ -160,28 +127,28 @@ int main(int argc, char **argv){
   printf("%s has joined\n", name);
 
 
-  //thread to send message in the CHATROOM
+  //CREATE THREADS
 	pthread_t send_msg_thread;
-
-            if(pthread_create(&send_msg_thread, NULL, (void *) send_msg_handler, NULL) != 0){
-          		printf("ERROR: pthread\n");
-              return EXIT_FAILURE;
-          	}
+//	 pthread_create(&tid1, NULL, thread_main_send, (void*) args);
+  if(pthread_create(&send_msg_thread, NULL, (void *) send_msg_handler, NULL) != 0){
+		printf("ERROR: pthread\n");
+    return EXIT_FAILURE;
+	}
 
   //thread that recieves message from the CHATROOM
 	pthread_t recv_msg_thread;
+//   pthread_create(&tid2, NULL, thread_main_recv, (void*) args);
+  if(pthread_create(&recv_msg_thread, NULL, (void *) recv_msg_handler, NULL) != 0){
+		printf("ERROR: pthread\n");
+		return EXIT_FAILURE;
+	}
 
-        if(pthread_create(&recv_msg_thread, NULL, (void *) recv_msg_handler, NULL) != 0){
-      		printf("ERROR: pthread\n");
-      		return EXIT_FAILURE;
-      	}
-
-      	while (1){
-      		if(flag){
-      			printf("\nBye\n");
-      			break;
-          }
-      	}
+	while (1){
+		if(flag){
+			printf("\nBye\n");
+			break;
+    }
+	}
 
 	close(sockfd);
 
