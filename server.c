@@ -1,252 +1,577 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
 #include <pthread.h>
-#include <sys/types.h>
+#include <unistd.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define MAX_CLIENTS 100  //make this 1000
-#define BUFFER_SZ1 2048
-//#define BUFFER_SZ2 2048
+#include <ctype.h>
+#include <stdatomic.h>
 
 
-static _Atomic unsigned int cli_count = 0;
-static int uid = 10;
+// Constants
+#define MAX_CLIENTS 100
+#define MAX_LINE_LENGTH 20000 // 20k bytes including the \n
+#define DEFAULT_PORT 1234
+#define MAX_NAME_LENGTH 64
+#define MAX_ROOMNAME_LENGTH 64
 
-/* Client structure */
-typedef struct{
-	struct sockaddr_in address;
-	int sockfd;
-	int uid;
-	char name[32];
-} client_t;
+// For the pre-threading
+#define SBUFSIZE 16
+#define NTHREADS 4		// Number of worker threads by default
 
-client_t *clients[MAX_CLIENTS];
 
-pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+// Typedefs
 
-void str_overwrite_stdout() {
-    printf("\r%s", "> ");
-    fflush(stdout);
+// Client struct
+typedef struct
+{
+    int clientfd;   // File descriptor for the client's connection
+    int identifier; // Client identifier
+    int joined;     // Boolean that says whether a client has joined a room 1 if yes 0 if no
+    char roomname[MAX_ROOMNAME_LENGTH]; // The chat room a client is part of
+    char username[MAX_NAME_LENGTH]; // String name of the user
+} client_struct;
+
+
+// Buffer for pre-threading
+typedef struct
+{
+    client_struct **buf;
+	int n;			/* Maximum number of slots */
+	int front;		/* buf[(front+1)%n] is the first item */
+	int rear;		/* buf[rear%n] is the last item */
+	int slots;		/* Counts avalible slots */
+	pthread_mutex_t mutex;	/* Protects access to buf */
+	pthread_cond_t not_empty;
+	pthread_cond_t not_full;
+} sbuf_t;
+
+
+// Function definitions
+void client_add(client_struct *client);
+void client_remove(client_struct *client);
+
+void sbuf_init(sbuf_t *sp, int n);
+void sbuf_insert(sbuf_t *sp, client_struct *item);
+client_struct* sbuf_remove(sbuf_t *sp);
+
+char* concat(const char *s1, const char *s2);
+void strip_CR_NL(char *str);
+
+static void* thread(void *vargp);
+
+void send_msg_to( char *msg, int connfd);
+void send_msg_all(char *msg, client_struct *from_client);
+
+static void doit(client_struct *from_client);
+
+
+
+
+// Globals
+sbuf_t sbuf; // Shared buffer of client_struct pointers
+client_struct *client_list[MAX_CLIENTS] = {0}; // Array to hold all the currently connected clients (NULL initalized)
+pthread_mutex_t client_list_mutex;
+atomic_uint num_clients = 0;
+int next_identifier = 1; // Number we use to get a unique identifier for an incoming new client
+
+
+/*
+ * Requires:
+ *   Client struct pointer.
+ *
+ * Effects:
+ *   Adds a client the the client_list.
+ */
+void client_add(client_struct *client)
+{
+    char name;
+    pthread_mutex_lock(&client_list_mutex);
+                      for (int i = 0; i < MAX_CLIENTS; ++i)
+                      {
+                          if (client_list[i] == NULL) // Looking for a NULL slot
+                          {
+                              client_list[i] = client;
+                              strcpy(client->username, name);
+                              printf("[Server] Client connected with identifier: %d and fd: %d\n", client->identifier, client->clientfd);
+                              //sprintf(buff_out, "%s has joined\n", cli->name);
+                              printf("[Server] Client \"%s\" joined the server\n", buff_out);
+                              num_clients++;
+                              break;
+                          }
+                      }
+    pthread_mutex_unlock(&client_list_mutex);
 }
 
-void str_trim_lf (char* arr, int length) {
-  int i;
-  for (i = 0; i < length; i++) { // trim \n
-    if (arr[i] == '\n') {
-      arr[i] = '\0';
-      break;
+/*
+ * Requires:
+ *   Client struct pointer.
+ *
+ * Effects:
+ *   Removes a client the the client_list.
+ */
+void client_remove(client_struct *client)
+{
+    pthread_mutex_lock(&client_list_mutex);
+    for (int i = 0; i < MAX_CLIENTS; ++i)
+    {
+        if (client_list[i] != NULL)
+        {
+            if(client_list[i]->identifier == client->identifier)
+            {
+                free(client);
+                client_list[i] = NULL;
+                num_clients--;
+            }
+        }
+
     }
-  }
+    pthread_mutex_unlock(&client_list_mutex);
 }
 
-void print_client_addr(struct sockaddr_in addr){
-    printf("%d.%d.%d.%d",
-        addr.sin_addr.s_addr & 0xff,
-        (addr.sin_addr.s_addr & 0xff00) >> 8,
-        (addr.sin_addr.s_addr & 0xff0000) >> 16,
-        (addr.sin_addr.s_addr & 0xff000000) >> 24);
+
+/*
+ * Requires:
+ *   Desired size of the bounded buffer and a pointer to the sbuf_t pointer.
+ *
+ * Effects:
+ *   Initializes a bounded buffer for holding connection requests.
+ */
+void sbuf_init(sbuf_t *sp, int n)
+{
+    sp->buf = malloc(n * sizeof(client_struct *));
+    for (int i = 0; i < n; ++i)
+    {
+        (sp->buf)[i] = NULL;
+    }
+	sp->n = n;				/* Buffer holds n items */
+	sp->front = sp->rear = 0;		/* Empty iff front == rear */
+	pthread_mutex_init(&sp->mutex, NULL);	/* Default mutex for locking */
+	sp->slots = 0;				/* All slots available */
+	pthread_cond_init(&sp->not_full, NULL);
+	pthread_cond_init(&sp->not_empty, NULL);
 }
 
-/* Add clients to queue */
-void queue_add(client_t *cl){
-	pthread_mutex_lock(&clients_mutex);
-
-	for(int i=0; i < MAX_CLIENTS; ++i){
-		if(!clients[i]){
-			clients[i] = cl;
-			break;
-		}
+/*
+ * Requires:
+ *   Buffer pointer and item to be inserted.
+ *
+ * Effects:
+ *   Inserts item into the rear of the buffer.
+ */
+void sbuf_insert(sbuf_t *sp, client_struct *item)
+{
+	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
+	while (sp->slots == sp->n) {		/* Wait for available slot */
+		pthread_cond_wait(&sp->not_full, &sp->mutex);
 	}
+	sp->buf[(++sp->rear) % (sp->n)] = item;	/* Insert the item */
+	sp->slots = sp->slots + 1;
+	pthread_cond_signal(&sp->not_empty);
+	pthread_mutex_unlock(&sp->mutex);	/* Unlock the buffer */
 
-	pthread_mutex_unlock(&clients_mutex);
 }
 
-/* Remove clients to queue */
-void queue_remove(int uid){
-	pthread_mutex_lock(&clients_mutex);
-
-	for(int i=0; i < MAX_CLIENTS; ++i){
-		if(clients[i]){
-			if(clients[i]->uid == uid){
-				clients[i] = NULL;
-				break;
-			}
-		}
+/*
+ * Requires:
+ *   Buffer pointer.
+ *
+ * Effects:
+ *   Removes first item from buffer.
+ */
+client_struct* sbuf_remove(sbuf_t *sp)
+{
+	client_struct *item;
+	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
+	while (sp->slots == 0) {		/* Wait for available item */
+		pthread_cond_wait(&sp->not_empty, &sp->mutex);
 	}
-
-	pthread_mutex_unlock(&clients_mutex);
+	item = sp->buf[(++sp->front) % (sp->n)];/* Remove the item */
+	sp->slots = sp->slots - 1;
+	pthread_cond_signal(&sp->not_full);	/* Announce available slot */
+	pthread_mutex_unlock(&sp->mutex);	/* Unlock the buffer */
+	return item;
 }
 
-/* Send message to all clients except sender */
-void send_message(char *s, int uid){
-	pthread_mutex_lock(&clients_mutex);
-
-	for(int i=0; i<MAX_CLIENTS; ++i){
-		if(clients[i]){
-			if(clients[i]->uid != uid){
-				if(write(clients[i]->sockfd, s, strlen(s)) < 0){
-					perror("ERROR: write to descriptor failed");
-					break;
-				}
-			}
-		}
-	}
-
-	pthread_mutex_unlock(&clients_mutex);
+/*
+ * Requires:
+ *   2 strings.
+ *
+ * Effects:
+ *   Concatenates two strings and returns the result.
+ */
+char* concat(const char *s1, const char *s2)
+{
+    char *result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
+    if (result == NULL)
+    {
+        printf("concat(): failed to allocate memory.\n");
+        exit(EXIT_FAILURE);
+    }
+    strcpy(result, s1);
+    strcat(result, s2);
+    return result;
 }
 
-/* Handle all communication with the client */
-void *handle_client(void *arg){
-	char buff_out[BUFFER_SZ1];
-	//char buff_out_pro[BUFFER_SZ1+32];
-	char name[32];
-	//char message_[BUFFER_SZ1];
-	//char nl = "/n";
-	int leave_flag = 0;
 
-	cli_count++;
-	client_t *cli = (client_t *)arg;
-
-	// Name
-	if(recv(cli->sockfd, name, 32, 0) <= 0 || strlen(name) <  2 || strlen(name) >= 32-1){
-		printf("Didn't enter the name.\n");
-		leave_flag = 1;
-	} else{
-		strcpy(cli->name, name);
-		sprintf(buff_out, "%s has joined\n", cli->name);
-		printf("%s", buff_out);
-		send_message(buff_out, cli->uid);
-	}
-
-	//Erases the data in buff_out
-	bzero(buff_out, BUFFER_SZ1);
-
-	while(1){   //so that it keeps spinning for every thread in the server spinner
-		if (leave_flag) {
-			break;
-		}
-
-		int receive = recv(cli->sockfd, buff_out, BUFFER_SZ1, 0);  //recieves any changes from clients
-		if (receive > 0){
-			if(strlen(buff_out) > 0){
-				//strcpy(buff_out, message_);
-				//bzero(buff_out, BUFFER_SZ1);
-				//message_ = buff_out;
-				//sprintf(message_, "%s:", cli->name);
-				//bzero(buff_out, BUFFER_SZ1);
-				//sprintf(message_, " %s", buff_out);
-				//sprintf(message_, "%s", nl);
-
-				send_message(cli->name, cli->uid);
-				send_message(": ", cli->uid);
-				send_message(buff_out, cli->uid);
-				send_message("\n", cli->uid);
-			  //send_message(buff_out_pro, cli->uid);
-
-				str_trim_lf(buff_out, strlen(buff_out));
-				printf("%s: ", cli->name);
-				printf("%s\n", buff_out);
-
-			}
-		} else if (receive == 0 || strcmp(buff_out, "exit") == 0){
-			sprintf(buff_out, "%s has left\n", cli->name);
-			printf("%s", buff_out);
-			send_message(buff_out, cli->uid);
-			leave_flag = 1;
-		} else {
-			printf("ERROR: -1\n");
-			leave_flag = 1;
-		}
-
-		bzero(buff_out, BUFFER_SZ1);
-	}
-
-  /* Delete client from queue and yield thread */
-	close(cli->sockfd);
-  queue_remove(cli->uid);
-  free(cli);
-  cli_count--;
-  pthread_detach(pthread_self());
-
-	return NULL;
+/*
+ * Requires:
+ *   Input string.
+ *
+ * Effects:
+ *   Strips newlines and return carriages from an input string by replacing them with nullbytes.
+ */
+void strip_CR_NL(char *str)
+{
+    while (*str != '\0') {
+        if (*str == '\r' || *str == '\n') {
+            *str = '\0';
+        }
+        str++;
+    }
 }
 
-int main(int argc, char **argv){
-	if(argc != 2){
-		printf("Usage: %s <port>\n", argv[0]);
-		return EXIT_FAILURE;
-	}
 
-//  char buff_out[BUFFER_SZ2];
-//	char name[32];
-	char *ip = "127.0.0.1";
-	int port = atoi(argv[1]);
-	int option = 1;
-	int listenfd = 0, connfd = 0;
-  struct sockaddr_in serv_addr;
-  struct sockaddr_in cli_addr;
-  pthread_t tid;
+/*
+ * Requires:
+ *   Port number CLI argument.
+ *
+ * Effects:
+ *   Starts the chat server and serves clients.
+ */
+int main(int argc, char **argv)
+{
+    // Process argument
+    if (argc > 2)
+    {
+        printf("error: server requires a single argument for the desired port number\n");
+        printf("usage: ./chat_server [port]\n");
+        exit(EXIT_FAILURE);
+    }
+    unsigned int port;
+    if (argc == 1) // If no port number is specified
+    {
+        port = 1234;
+        printf("Started server on default port: %u\n", port);
+    }
+    else
+    {
+        port = atoi(argv[1]);
+        if (port <= 1023 || port > 65535) {
+            printf("error: specify port number greater than 1023\n");
+            exit(EXIT_FAILURE);
+        }
+        printf("Started server on port: %u\n", port);
+    }
 
-  /* Socket settings */
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = inet_addr(ip);
-  serv_addr.sin_port = htons(port);
-
-  /* Ignore pipe signals */
+    // Ignore SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
 
-	if(setsockopt(listenfd, SOL_SOCKET,(SO_REUSEPORT | SO_REUSEADDR),(char*)&option,sizeof(option)) < 0){
-		perror("ERROR: setsockopt failed");
-    return EXIT_FAILURE;
+    // Initalize mutex for adding clients to the client_list
+    pthread_mutex_init(&client_list_mutex, NULL);
+
+
+
+    /* Setup server */
+
+    /* Pre-threading setup */
+    pthread_t tid;
+    /* Client settings */
+    int connfd = 0;
+    struct sockaddr_in cli_addr;
+    /* Server settings */
+    int listenfd = 0;
+    struct sockaddr_in serv_addr;
+    int opt = 1;
+
+    // Create socket file descriptor for the server
+        if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) // IPv4, TCP, protocol value 0
+        {
+            printf("socket creation failed\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Forcefully attaching socket to the port
+        if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+        {
+            printf("setsockopt error\n");
+            exit(EXIT_FAILURE);
+        }
+        if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)))
+        {
+            printf("setsockopt error\n");
+            exit(EXIT_FAILURE);
+        }
+
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(port);
+
+    // Attach socket to the desired port, need to cast sockaddr_in to generic struture sockaddr
+    //bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)
+    if (bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        printf("socket bind failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Wait for the clients to make a connection
+    if (listen(listenfd, MAX_CLIENTS) < 0)
+    {
+        printf("listen error\n");
+        exit(EXIT_FAILURE);
+    }
+    printf("=== WELCOME TO THE CHATROOM ===\n");
+
+
+	sbuf_init(&sbuf, SBUFSIZE); // Create bounded buffer for our worker threads
+	for (int i = 0; i < NTHREADS; i++) // Spawn worker threads
+    {
+		pthread_create(&tid, NULL, thread, NULL);
+    }
+
+
+
+
+//starts spinning
+    /* Handle clients */
+    while(1)
+    {
+        // Create a connected descriptor that can be used to communicate with the client
+        socklen_t client_addr_len = sizeof(cli_addr);
+        if ((connfd = accept(listenfd, (struct sockaddr *)&cli_addr, &client_addr_len)) < 0)
+        {
+            printf("accept error\n");
+            exit(EXIT_FAILURE);
+        }
+
+        /* Check if max clients is reached */
+        if (num_clients == MAX_CLIENTS) // Reject connection if the client list is full
+        {
+            printf("[Server] Max clients reached, connection rejected\n");
+            close(connfd);  // will close the connection
+            continue;       /* will get out of the while loop if Max clients are reached   */
+        }
+
+        // Initialize a client struct + attributes, and add it to the list of clients
+        client_struct *client = calloc(1, sizeof(client_struct));
+        client->clientfd = connfd;                //CLIENT FILE DESCRIPTOR
+        client->identifier = next_identifier++;    //IDENTIFIER
+        client->joined = 0;
+
+        // ADDS CLIENT TO QUEUE
+        client_add(client);
+
+        if (num_clients > NTHREADS) // WIf the number of clients is exceeding the default amount of worker threads
+        {
+            pthread_create(&tid, NULL, thread, NULL);
+        }
+
+        // Handle the client by inserting the connfd into the bounded buffer (Done by the main thread)
+        sbuf_insert(&sbuf, client);
+    }
+
+    return(0);
+}
+
+/*
+ * Thread routine
+ *
+ * Requires:
+ *   Nothing
+ *
+ * Effects:
+ *   Services client request with worker thread.
+ */
+void *thread(void *vargp)
+{
+	(void) vargp; // Avoid message about unused arguments
+    pthread_detach(pthread_self()); // No return values
+	while(1)
+    {
+        // Remove next-to-be-serviced client from bounded buffer
+        client_struct *from_client = sbuf_remove(&sbuf);
+        int connfd = from_client->clientfd;
+
+		// Service client
+        doit(from_client);
+        char *leave_msg = concat(from_client->username, " has left");
+        send_msg_all(leave_msg, from_client);
+        client_remove(from_client);
+		close(connfd);
 	}
 
-	/* Bind */
-  if(bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-    perror("ERROR: Socket binding failed");
-    return EXIT_FAILURE;
-  }
+  return NULL;
+}
 
-  /* Listen */
-  if (listen(listenfd, 10) < 0) {
-    perror("ERROR: Socket listening failed");
-    return EXIT_FAILURE;
-	}
 
-	printf("=== WELCOME TO THE CHATROOM ===\n");
+/*
+ * Requires:
+ *   String message and connection file descriptor.
+ *
+ * Effects:
+ *   Sends a string message to a single client via client's connection file descriptor.
+ */
+void send_msg_to( char *msg, int connfd)
+{
+    if (write(connfd, msg, strlen(msg)) < 0) {
+        printf("Write message to failed\n");
+        exit(EXIT_FAILURE);
+    }
+}
 
-	while(1){
-		socklen_t clilen = sizeof(cli_addr);
-		connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &clilen);
 
-		/* Check if max clients is reached */
-		if((cli_count + 1) == MAX_CLIENTS){
-			printf("Max clients reached. Rejected: ");
-			print_client_addr(cli_addr);
-			printf(":%d\n", cli_addr.sin_port);
-			close(connfd);
-			continue;               /* will get out of the while loop if Max clients are reached   */
 
-		}
 
-		/* Client settings */
-		client_t *cli = (client_t *)malloc(sizeof(client_t));
-		cli->address = cli_addr;
-		cli->sockfd = connfd;
-		cli->uid = uid++;
+/*
+ * Requires:
+ *   String message and client_struct of who that message is from.
+ *
+ * Effects:
+ *   Sends a string message to all other clients in the same room as from_client.
+ */
+void send_msg_all(char *msg, client_struct *from_client)
+{
+    int connfd; // Holds the client fd's for each client iterated throug in the client_list;
+    int from_id = from_client->identifier;
+    char *from_roomname = from_client->roomname;
+    char *end_seq = "\r\n";     // im gonna make that into "\n"
 
-		queue_add(cli);
-		pthread_create(&tid, NULL, &handle_client, (void*)cli);
+    pthread_mutex_lock(&client_list_mutex);
+    for (int i = 0; i < MAX_CLIENTS; ++i)
+    {
+        if ((client_list[i] != NULL)
+            && (client_list[i]->identifier != from_id)
+            && (!strcmp(client_list[i]->roomname, from_roomname))) // Looking for a non-NULL slots, don't send to the client that sent it, and only send to clients from the same room
+        {
+            connfd = client_list[i]->clientfd;
 
-		/* Reduce CPU usage */
-		sleep(1);
-	}
+            if (write(connfd, msg, strlen(msg)) < 0)
+            {
+                printf("Write message to all failed (msg)\n");
+                exit(EXIT_FAILURE);
+            }
+            // Write \r\n
+            if (write(connfd, end_seq, strlen(end_seq)) < 0)
+            {
+                printf("Write message to all failed (end_seq)\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    pthread_mutex_unlock(&client_list_mutex);
+}
 
-	return EXIT_SUCCESS;
+
+/*
+ * Requires:
+ *   client_struct of the client sending a message.
+ *
+ * Effects:
+ *   Services the client's requests.
+ */
+void doit(client_struct *from_client)
+{
+    int valread;
+    int from_connfd = from_client->clientfd;
+    int from_id = from_client->identifier;
+    //char from_name[MAX_NAME_LENGTH] = from_client->username;
+    int from_joined = from_client->joined;
+    char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
+
+    printf("[Server] Client \"%d\" joined the server\n", from_id);
+    //printf("[Server] Client \"%s\" joined the server\n", from_client->username);
+    // Continously read messages from the client
+    while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
+    {
+        strip_CR_NL(msg_buffer); // Strip return carriage and new line from terminal entered message
+        msg_buffer[MAX_LINE_LENGTH - 1] = '\0';
+
+        if (!from_joined)
+        {
+            // strncpy the message buffer since strtok() modifies the msg_buffer
+            char msg_buffer_cpy[MAX_LINE_LENGTH] = {0};
+            strncpy(msg_buffer_cpy, msg_buffer, MAX_LINE_LENGTH);
+
+            // Delimit the input string use strtok() to look for JOIN {ROOMNAME} {USERNAME}<NL>
+            int i = 1;
+            char *p = strtok(msg_buffer_cpy, " ");
+
+            if (p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
+            {
+                continue;
+            }
+
+            for (int k = 0; k < strlen(p); ++k) // Case insensitivity for keyword JOIN
+            {
+                p[k] = toupper(p[k]);
+            }
+
+            if (!strcmp(p, "JOIN")) // We only care to parse the line if its a JOIN command at this point
+            {
+                while (p) {
+                    p = strtok(NULL, " ");
+                    i = i + 1;
+
+                    if (i == 2) // ROOMNAME
+                    {
+                        strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                        from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                    }
+                    else if (i == 3) // USERNAME
+                    {
+                        strncpy(from_client->username, p, MAX_NAME_LENGTH);
+                        from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                    }
+                }
+                // If after parsing the JOIN command, there are not 3 tokens (including JOIN) something has gone wrong..
+                if (i != 4) // +1 from how the while() loop above works
+                {
+                    send_msg_to("ERROR\n", from_connfd);
+                    break;
+                }
+                else
+                {
+                    printf("[Server] Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
+                    char* joined_message = concat(from_client->username, " has joined");
+                    send_msg_all(joined_message, from_client);
+                    send_msg_to(joined_message, from_client->clientfd);
+                    send_msg_to("\r\n", from_client->clientfd);
+
+                    free(joined_message);
+                    from_joined = 1;
+                }
+
+            }
+            else // if the command isnt a valid JOIN, send ERROR to client and close the connection
+            {
+                send_msg_to("ERROR\n", from_connfd);
+                break;
+            }
+
+        }
+        else // Once the client has joined a chatroom they will be able to send messages
+        {
+            printf("[Server] In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
+
+            // Append username and prompt to the message
+            char* username = from_client->username;
+            char* prompt = concat(username, ": ");
+            char* complete_msg = concat(prompt, msg_buffer);
+
+            // Send prompted message back to self and to all other clients in the same chat room
+            send_msg_all(complete_msg, from_client);
+            send_msg_to(complete_msg, from_client->clientfd);
+            send_msg_to("\r\n", from_client->clientfd);
+
+            free(prompt);
+            free(complete_msg);
+        }
+        memset(msg_buffer, 0, sizeof(msg_buffer)); // Clear msg_buffer so previous messages don't leak into the next
+    }
+
 }
