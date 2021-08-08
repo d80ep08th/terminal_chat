@@ -17,4 +17,5 @@ The script validates for "JOIN"
 
 
 # Linked List 
-DMA stands for Dynamic Memory Allocation. The linked list supports this concept which proves to be quite helpful when the number of elements and their sizes are not predetermined. The memory can be allocated during processing as and when required.
+>DMA stands for Dynamic Memory Allocation. 
+>The linked list supports this concept which proves to be quite helpful when the number of elements and their sizes are not predetermined. The memory can be allocated during processing as and when required.
