@@ -16,8 +16,8 @@
 #define MAX_LINE_LENGTH 20000 // 20k bytes including the \n
 #define DEFAULT_PORT 1234
 // ASCII string of 1-20 characters
-#define MAX_NAME_LENGTH 64
-#define MAX_ROOMNAME_LENGTH 64
+#define MAX_NAME_LENGTH 20
+#define MAX_ROOMNAME_LENGTH 20
 
 // For the pre-threading
 #define SBUFSIZE 16
@@ -48,7 +48,7 @@ typedef struct
 	pthread_mutex_t mutex;	/* Protects access to buf */
 	pthread_cond_t not_empty;
 	pthread_cond_t not_full;
-} sbuf_t;
+} shared_buffer_t;
 
 
 // Mapping of Functions
@@ -56,15 +56,15 @@ void add_in_Q(cli_linked_list *client);  // Given: Client struct pointer. Effect
 
 void remove_from_Q(cli_linked_list *client); // Given: Client struct pointer. Effects: Removes a client the the client_list.
 
-// Given: Desired size of the bounded buffer and a pointer to the sbuf_t pointer.
+// Given: Desired size of the bounded buffer and a pointer to the shared_buffer_t pointer.
 // Effects:Initializes a bounded buffer for holding connection requests.
-void start_buffer(sbuf_t *sp, int n);
+void start_buffer(shared_buffer_t *sp, int n);
 
 // Given: Buffer pointer and item to be inserted.. Effects:Inserts item into the rear of the buffer.
-void insert_in_Buffer(sbuf_t *sp, cli_linked_list *item);
+void insert_in_Buffer(shared_buffer_t *sp, cli_linked_list *item);
 
  // Given: Buffer pointer. Effects: Removes first item from buffer.
-cli_linked_list* remove_from_buffer(sbuf_t *sp);
+cli_linked_list* remove_from_buffer(shared_buffer_t *sp);
 
 // Given: 2 strings.. Effects:Concatenates two strings and returns the result.
 char* concat(const char *s1, const char *s2);
@@ -91,7 +91,7 @@ static void serve_request_of_client(cli_linked_list *from_client);
 
 
 // Globals
-sbuf_t sbuf; // Shared buffer of cli_linked_list pointers
+shared_buffer_t shared_buffer; // Shared buffer of cli_linked_list pointers
 cli_linked_list *client_list[MAX_CLIENTS] = {0}; // Array to hold all the currently connected clients (NULL initalized)
 pthread_mutex_t client_list_mutex;
 atomic_uint num_clients = 0;
@@ -139,7 +139,7 @@ void remove_from_Q(cli_linked_list *client)
     pthread_mutex_unlock(&client_list_mutex);
 }
 
-void start_buffer(sbuf_t *sp, int n)
+void start_buffer(shared_buffer_t *sp, int n)
 {
     sp->buf = malloc(n * sizeof(cli_linked_list *));
     for (int i = 0; i < n; ++i)
@@ -154,7 +154,7 @@ void start_buffer(sbuf_t *sp, int n)
 	pthread_cond_init(&sp->not_empty, NULL);
 }
 
-void insert_in_Buffer(sbuf_t *sp, cli_linked_list *item)
+void insert_in_Buffer(shared_buffer_t *sp, cli_linked_list *item)
 {
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
 	while (sp->slots == sp->n) {		/* Wait for available slot */
@@ -167,7 +167,7 @@ void insert_in_Buffer(sbuf_t *sp, cli_linked_list *item)
 
 }
 
-cli_linked_list* remove_from_buffer(sbuf_t *sp)
+cli_linked_list* remove_from_buffer(shared_buffer_t *sp)
 {
 	cli_linked_list *item;
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
     printf("=== WELCOME TO THE CHATROOM ===\n");
 
 
-	start_buffer(&sbuf, SBUFSIZE); // Create bounded buffer for our worker threads
+	start_buffer(&shared_buffer, SBUFSIZE); // Create bounded buffer for our worker threads
 	for (int i = 0; i < NTHREADS; i++) // Spawn worker threads
     {
 		pthread_create(&tid, NULL, new_thread, NULL);
@@ -334,7 +334,7 @@ int main(int argc, char **argv)
         }
 
         // Handle the client by inserting the connfd into the bounded buffer (Done by the main thread)
-        insert_in_Buffer(&sbuf, client);
+        insert_in_Buffer(&shared_buffer, client);
     }
 
     return(0);
@@ -347,7 +347,7 @@ void *new_thread(void *vargp)
 	while(1)
     {
         // Remove next-to-be-serviced client from bounded buffer
-        cli_linked_list *from_client = remove_from_buffer(&sbuf);
+        cli_linked_list *from_client = remove_from_buffer(&shared_buffer);
         int connfd = from_client->clientfd;
 
 		// Service client
