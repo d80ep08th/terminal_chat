@@ -424,6 +424,9 @@ void serve_request_of_client(cli_linked_list *from_client)
     // Continously read messages from the client
     while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
     {
+
+        
+        msg_described_client("=> ", from_connfd);
         strip_CR_NL(msg_buffer); // Strip return carriage and new line from terminal entered message
         msg_buffer[MAX_LINE_LENGTH - 1] = '\0';
 
