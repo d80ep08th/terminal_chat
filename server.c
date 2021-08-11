@@ -109,6 +109,7 @@ void add_in_Q(cli_linked_list *client)
                           {
                               client_list[i] = client;
                               //strcpy(client->username, name);
+                              printf("[initiates TCP conn]\n");
                               printf("[SERVER]\n Client connected with identifier: %d and fd: %d\n", client->identifier, client->clientfd);
                               //sprintf(buff_out, "%s has joined\n", cli->name);
                               //printf("[SERVER]\n\n\n Client \"%s\" joined the server\n", buff_out);
@@ -487,6 +488,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                 if (i != 4) // +1 from how the while() loop above works
                 {
                     msg_described_client("ERROR: incorrect , not enough or too many inputs\n", from_connfd);
+                    msg_described_client("[closes TCP conn]\n", from_connfd);
                     break;
                 }
                 else
@@ -505,6 +507,8 @@ void serve_request_of_client(cli_linked_list *from_client)
             else // if the command isnt a valid JOIN, send ERROR to client and close the connection
             {
                 msg_described_client("ERROR\n", from_connfd);
+                msg_described_client("[closes TCP conn]\n", from_connfd);
+
                 break;
             }
 
