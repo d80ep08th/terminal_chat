@@ -455,8 +455,6 @@ void serve_request_of_client(cli_linked_list *from_client)
                                     //====|========|========
                                     //i=1, JOIN || i=2,  ROOMNAME || i=3, USERNAME
 
-                                                  if( strlen(p) < 2 || strlen(p) >= 20-1)
-                                                  {
 
                                                           if (i == 2) // ROOMNAME
                                                           {
@@ -488,8 +486,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                                                               break;
                                                             }
                                                           }
-                                                  }
-
+                                            
                                   }
 
                           //if while(p) ends without discovering 4 tokens which means i = 4, then it throws error
