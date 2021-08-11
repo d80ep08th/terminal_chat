@@ -352,6 +352,7 @@ void *new_thread(void *vargp)
 		// Service client
         serve_request_of_client(from_client);
         char *leave_msg = concat(from_client->username, " has left\n");
+        printf("%s has left", from_client->username);
         msg_every_client_same_room(leave_msg, from_client);
         remove_from_Q(from_client);
 		close(connfd);
@@ -410,7 +411,7 @@ void serve_request_of_client(client_struct *from_client)
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
     printf("[Server] Client \"%d\" joined the server\n", from_id);
-    msg_described_client("Connect to a room by entering command in this format \"JOIN {ROOMNAME} {USERNAME}\" : \n", from_connfd);
+    msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n Else ignore \n", from_connfd);
     // JOIN ROOMNAME USERNAME
 
     //printf("[Server] Client \"%s\" joined the server\n", from_client->username);
