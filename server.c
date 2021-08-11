@@ -426,24 +426,36 @@ void serve_request_of_client(cli_linked_list *from_client)
         strip_CR_NL(msg_buffer); // Strip return carriage and new line from terminal entered message
         msg_buffer[MAX_LINE_LENGTH - 1] = '\0';
 
-        if (!from_joined)
+        if (!from_joined)  //from_joined = 0
         {
             // strncpy the message buffer since strtok() modifies the msg_buffer
             char msg_buffer_cpy[MAX_LINE_LENGTH] = {0};
+
+            //copying the message buffer
             strncpy(msg_buffer_cpy, msg_buffer, MAX_LINE_LENGTH);
 
             // Delimit the input string use strtok() to look for JOIN {ROOMNAME} {USERNAME}<NL>
             int i = 1;
+
+            //strtok(string,"symbol")
+            //strtok will divide string into tokens
+            // with each token seperated from the next with the symbol
+            //{string1}"symbol"{string2}"symbol"{string3}
+            //token1 = sring1
+            //token2 = string2
+            //token3 = string3
             char *p = strtok(msg_buffer_cpy, " ");
 
-            if (p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
+            if (p == NULL || p == "/n") // Ignore blank input, or else a segfault will occur in the strcmp() below
             {
                 continue;
             }
 
             for (int k = 0; k < strlen(p); ++k) // Case insensitivity for keyword JOIN
             {
+                //
                 p[k] = toupper(p[k]);
+
             }
 
             if (!strcmp(p, "JOIN")) // We only care to parse the line if its a JOIN command at this point
@@ -454,11 +466,13 @@ void serve_request_of_client(cli_linked_list *from_client)
 
                     if (i == 2) // ROOMNAME
                     {
+                      //check if ROOM NAME FITS 20characters
                         strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
                         from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
                     }
                     else if (i == 3) // USERNAME
                     {
+                        //check if USER NAME FITS 20characters
                         strncpy(from_client->username, p, MAX_NAME_LENGTH);
                         from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
                     }
