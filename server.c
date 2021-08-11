@@ -50,23 +50,41 @@ typedef struct
 } sbuf_t;
 
 
-// Function definitions
-void client_add(client_struct *client);
-void client_remove(client_struct *client);
+// Mapping of Functions
+void add_in_Q(client_struct *client);  // Given: Client struct pointer. Effects: Adds a client the the client_list.
 
-void sbuf_init(sbuf_t *sp, int n);
-void sbuf_insert(sbuf_t *sp, client_struct *item);
-client_struct* sbuf_remove(sbuf_t *sp);
+void remove_from_Q(client_struct *client); // Given: Client struct pointer. Effects: Removes a client the the client_list.
 
+// Given: Desired size of the bounded buffer and a pointer to the sbuf_t pointer.
+// Effects:Initializes a bounded buffer for holding connection requests.
+void start_buffer(sbuf_t *sp, int n);
+
+// Given: Buffer pointer and item to be inserted.. Effects:Inserts item into the rear of the buffer.
+void insert_in_Buffer(sbuf_t *sp, client_struct *item);
+
+ // Given: Buffer pointer. Effects: Removes first item from buffer.
+client_struct* remove_from_buffer(sbuf_t *sp);
+
+// Given: 2 strings.. Effects:Concatenates two strings and returns the result.
 char* concat(const char *s1, const char *s2);
+
+// Given: Input string.. Effects: Strips newlines and return carriages from an input string by replacing them with nullbytes.
 void strip_CR_NL(char *str);
 
-static void* thread(void *vargp);
+// Given:Port number CLI argument. Effects: Starts the chat server and serves clients.
+//int main(int argc, char **argv);
 
-void send_msg_to( char *msg, int connfd);
-void send_msg_all(char *msg, client_struct *from_client);
+ // Given: Effects:  Services client request with worker thread.
+static void* new_thread(void *vargp);
 
-static void doit(client_struct *from_client);
+// Given:  String message and connection file descriptor. Effects:  Sends a string message to a single client via client's connection file descriptor.
+void msg_described_client( char *msg, int connfd);
+
+// Given:String message and client_struct of who that message is from. Effects:Sends a string message to all other clients in the same room as from_client.
+void msg_every_client_same_room(char *msg, client_struct *from_client);
+
+// Given:client_struct of the client sending a message. Effects: Services the client's requests.
+static void serve_request_of_client(client_struct *from_client);
 
 
 
@@ -79,14 +97,8 @@ atomic_uint num_clients = 0;
 int next_identifier = 1; // Number we use to get a unique identifier for an incoming new client
 
 
-/*
- * Requires:
- *   Client struct pointer.
- *
- * Effects:
- *   Adds a client the the client_list.
- */
-void client_add(client_struct *client)
+
+void add_in_Q(client_struct *client)
 {
     //char name;
     pthread_mutex_lock(&client_list_mutex);
@@ -106,14 +118,8 @@ void client_add(client_struct *client)
     pthread_mutex_unlock(&client_list_mutex);
 }
 
-/*
- * Requires:
- *   Client struct pointer.
- *
- * Effects:
- *   Removes a client the the client_list.
- */
-void client_remove(client_struct *client)
+
+void remove_from_Q(client_struct *client)
 {
     pthread_mutex_lock(&client_list_mutex);
     for (int i = 0; i < MAX_CLIENTS; ++i)
@@ -132,15 +138,7 @@ void client_remove(client_struct *client)
     pthread_mutex_unlock(&client_list_mutex);
 }
 
-
-/*
- * Requires:
- *   Desired size of the bounded buffer and a pointer to the sbuf_t pointer.
- *
- * Effects:
- *   Initializes a bounded buffer for holding connection requests.
- */
-void sbuf_init(sbuf_t *sp, int n)
+void start_buffer(sbuf_t *sp, int n)
 {
     sp->buf = malloc(n * sizeof(client_struct *));
     for (int i = 0; i < n; ++i)
@@ -155,14 +153,7 @@ void sbuf_init(sbuf_t *sp, int n)
 	pthread_cond_init(&sp->not_empty, NULL);
 }
 
-/*
- * Requires:
- *   Buffer pointer and item to be inserted.
- *
- * Effects:
- *   Inserts item into the rear of the buffer.
- */
-void sbuf_insert(sbuf_t *sp, client_struct *item)
+void insert_in_Buffer(sbuf_t *sp, client_struct *item)
 {
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
 	while (sp->slots == sp->n) {		/* Wait for available slot */
@@ -175,14 +166,7 @@ void sbuf_insert(sbuf_t *sp, client_struct *item)
 
 }
 
-/*
- * Requires:
- *   Buffer pointer.
- *
- * Effects:
- *   Removes first item from buffer.
- */
-client_struct* sbuf_remove(sbuf_t *sp)
+client_struct* remove_from_buffer(sbuf_t *sp)
 {
 	client_struct *item;
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
@@ -196,13 +180,6 @@ client_struct* sbuf_remove(sbuf_t *sp)
 	return item;
 }
 
-/*
- * Requires:
- *   2 strings.
- *
- * Effects:
- *   Concatenates two strings and returns the result.
- */
 char* concat(const char *s1, const char *s2)
 {
     char *result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
@@ -216,14 +193,6 @@ char* concat(const char *s1, const char *s2)
     return result;
 }
 
-
-/*
- * Requires:
- *   Input string.
- *
- * Effects:
- *   Strips newlines and return carriages from an input string by replacing them with nullbytes.
- */
 void strip_CR_NL(char *str)
 {
     while (*str != '\0') {
@@ -234,14 +203,6 @@ void strip_CR_NL(char *str)
     }
 }
 
-
-/*
- * Requires:
- *   Port number CLI argument.
- *
- * Effects:
- *   Starts the chat server and serves clients.
- */
 int main(int argc, char **argv)
 {
     // Process argument
@@ -328,10 +289,10 @@ int main(int argc, char **argv)
     printf("=== WELCOME TO THE CHATROOM ===\n");
 
 
-	sbuf_init(&sbuf, SBUFSIZE); // Create bounded buffer for our worker threads
+	start_buffer(&sbuf, SBUFSIZE); // Create bounded buffer for our worker threads
 	for (int i = 0; i < NTHREADS; i++) // Spawn worker threads
     {
-		pthread_create(&tid, NULL, thread, NULL);
+		pthread_create(&tid, NULL, new_thread, NULL);
     }
 
 
@@ -364,59 +325,42 @@ int main(int argc, char **argv)
         client->joined = 0;
 
         // ADDS CLIENT TO QUEUE
-        client_add(client);
+        add_in_Q(client);
 
         if (num_clients > NTHREADS) // WIf the number of clients is exceeding the default amount of worker threads
         {
-            pthread_create(&tid, NULL, thread, NULL);
+            pthread_create(&tid, NULL, new_thread, NULL);
         }
 
         // Handle the client by inserting the connfd into the bounded buffer (Done by the main thread)
-        sbuf_insert(&sbuf, client);
+        insert_in_Buffer(&sbuf, client);
     }
 
     return(0);
 }
 
-/*
- * Thread routine
- *
- * Requires:
- *   Nothing
- *
- * Effects:
- *   Services client request with worker thread.
- */
-void *thread(void *vargp)
+void *new_thread(void *vargp)
 {
 	(void) vargp; // Avoid message about unused arguments
     pthread_detach(pthread_self()); // No return values
 	while(1)
     {
         // Remove next-to-be-serviced client from bounded buffer
-        client_struct *from_client = sbuf_remove(&sbuf);
+        client_struct *from_client = remove_from_buffer(&sbuf);
         int connfd = from_client->clientfd;
 
 		// Service client
-        doit(from_client);
+        serve_request_of_client(from_client);
         char *leave_msg = concat(from_client->username, " has left\n");
-        send_msg_all(leave_msg, from_client);
-        client_remove(from_client);
+        msg_every_client_same_room(leave_msg, from_client);
+        remove_from_Q(from_client);
 		close(connfd);
 	}
 
   return NULL;
 }
 
-
-/*
- * Requires:
- *   String message and connection file descriptor.
- *
- * Effects:
- *   Sends a string message to a single client via client's connection file descriptor.
- */
-void send_msg_to( char *msg, int connfd)
+void msg_described_client( char *msg, int connfd)
 {
     if (write(connfd, msg, strlen(msg)) < 0) {
         printf("Write message to failed\n");
@@ -424,17 +368,7 @@ void send_msg_to( char *msg, int connfd)
     }
 }
 
-
-
-
-/*
- * Requires:
- *   String message and client_struct of who that message is from.
- *
- * Effects:
- *   Sends a string message to all other clients in the same room as from_client.
- */
-void send_msg_all(char *msg, client_struct *from_client)
+void msg_every_client_same_room(char *msg, client_struct *from_client)
 {
     int connfd; // Holds the client fd's for each client iterated throug in the client_list;
     int from_id = from_client->identifier;
@@ -466,15 +400,7 @@ void send_msg_all(char *msg, client_struct *from_client)
     pthread_mutex_unlock(&client_list_mutex);
 }
 
-
-/*
- * Requires:
- *   client_struct of the client sending a message.
- *
- * Effects:
- *   Services the client's requests.
- */
-void doit(client_struct *from_client)
+void serve_request_of_client(client_struct *from_client)
 {
     int valread;
     int from_connfd = from_client->clientfd;
@@ -531,16 +457,16 @@ void doit(client_struct *from_client)
                 // If after parsing the JOIN command, there are not 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
-                    send_msg_to("ERROR\n", from_connfd);
+                    msg_described_client("ERROR\n", from_connfd);
                     break;
                 }
                 else
                 {
                     printf("[Server] Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
                     char* joined_message = concat(from_client->username, " has joined");
-                    send_msg_all(joined_message, from_client);
-                    send_msg_to(joined_message, from_client->clientfd);
-                    send_msg_to("\r\n", from_client->clientfd);
+                    msg_every_client_same_room(joined_message, from_client);
+                    msg_described_client(joined_message, from_client->clientfd);
+                    msg_described_client("\r\n", from_client->clientfd);
 
                     free(joined_message);
                     from_joined = 1;
@@ -549,7 +475,7 @@ void doit(client_struct *from_client)
             }
             else // if the command isnt a valid JOIN, send ERROR to client and close the connection
             {
-                send_msg_to("ERROR\n", from_connfd);
+                msg_described_client("ERROR\n", from_connfd);
                 break;
             }
 
@@ -564,9 +490,9 @@ void doit(client_struct *from_client)
             char* complete_msg = concat(prompt, msg_buffer);
 
             // Send prompted message back to self and to all other clients in the same chat room
-            send_msg_all(complete_msg, from_client);
-            send_msg_to(complete_msg, from_client->clientfd);
-            send_msg_to("\r\n", from_client->clientfd);
+            msg_every_client_same_room(complete_msg, from_client);
+            msg_described_client(complete_msg, from_client->clientfd);
+            msg_described_client("\r\n", from_client->clientfd);
 
             free(prompt);
             free(complete_msg);
