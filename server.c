@@ -12,9 +12,10 @@
 
 
 // Constants
-#define MAX_CLIENTS 100
+#define MAX_CLIENTS 1000
 #define MAX_LINE_LENGTH 20000 // 20k bytes including the \n
 #define DEFAULT_PORT 1234
+// ASCII string of 1-20 characters
 #define MAX_NAME_LENGTH 64
 #define MAX_ROOMNAME_LENGTH 64
 
@@ -33,13 +34,13 @@ typedef struct
     int joined;     // Boolean that says whether a client has joined a room 1 if yes 0 if no
     char roomname[MAX_ROOMNAME_LENGTH]; // The chat room a client is part of
     char username[MAX_NAME_LENGTH]; // String name of the user
-} client_struct;
+} cli_linked_list;
 
 
 // Buffer for pre-threading
 typedef struct
 {
-    client_struct **buf;
+    cli_linked_list **buf;
 	int n;			/* Maximum number of slots */
 	int front;		/* buf[(front+1)%n] is the first item */
 	int rear;		/* buf[rear%n] is the last item */
@@ -51,19 +52,19 @@ typedef struct
 
 
 // Mapping of Functions
-void add_in_Q(client_struct *client);  // Given: Client struct pointer. Effects: Adds a client the the client_list.
+void add_in_Q(cli_linked_list *client);  // Given: Client struct pointer. Effects: Adds a client the the client_list.
 
-void remove_from_Q(client_struct *client); // Given: Client struct pointer. Effects: Removes a client the the client_list.
+void remove_from_Q(cli_linked_list *client); // Given: Client struct pointer. Effects: Removes a client the the client_list.
 
 // Given: Desired size of the bounded buffer and a pointer to the sbuf_t pointer.
 // Effects:Initializes a bounded buffer for holding connection requests.
 void start_buffer(sbuf_t *sp, int n);
 
 // Given: Buffer pointer and item to be inserted.. Effects:Inserts item into the rear of the buffer.
-void insert_in_Buffer(sbuf_t *sp, client_struct *item);
+void insert_in_Buffer(sbuf_t *sp, cli_linked_list *item);
 
  // Given: Buffer pointer. Effects: Removes first item from buffer.
-client_struct* remove_from_buffer(sbuf_t *sp);
+cli_linked_list* remove_from_buffer(sbuf_t *sp);
 
 // Given: 2 strings.. Effects:Concatenates two strings and returns the result.
 char* concat(const char *s1, const char *s2);
@@ -80,25 +81,25 @@ static void* new_thread(void *vargp);
 // Given:  String message and connection file descriptor. Effects:  Sends a string message to a single client via client's connection file descriptor.
 void msg_described_client( char *msg, int connfd);
 
-// Given:String message and client_struct of who that message is from. Effects:Sends a string message to all other clients in the same room as from_client.
-void msg_every_client_same_room(char *msg, client_struct *from_client);
+// Given:String message and cli_linked_list of who that message is from. Effects:Sends a string message to all other clients in the same room as from_client.
+void msg_every_client_same_room(char *msg, cli_linked_list *from_client);
 
-// Given:client_struct of the client sending a message. Effects: Services the client's requests.
-static void serve_request_of_client(client_struct *from_client);
+// Given:cli_linked_list of the client sending a message. Effects: Services the client's requests.
+static void serve_request_of_client(cli_linked_list *from_client);
 
 
 
 
 // Globals
-sbuf_t sbuf; // Shared buffer of client_struct pointers
-client_struct *client_list[MAX_CLIENTS] = {0}; // Array to hold all the currently connected clients (NULL initalized)
+sbuf_t sbuf; // Shared buffer of cli_linked_list pointers
+cli_linked_list *client_list[MAX_CLIENTS] = {0}; // Array to hold all the currently connected clients (NULL initalized)
 pthread_mutex_t client_list_mutex;
 atomic_uint num_clients = 0;
 int next_identifier = 1; // Number we use to get a unique identifier for an incoming new client
 
 
 
-void add_in_Q(client_struct *client)
+void add_in_Q(cli_linked_list *client)
 {
     //char name;
     pthread_mutex_lock(&client_list_mutex);
@@ -119,7 +120,7 @@ void add_in_Q(client_struct *client)
 }
 
 
-void remove_from_Q(client_struct *client)
+void remove_from_Q(cli_linked_list *client)
 {
     pthread_mutex_lock(&client_list_mutex);
     for (int i = 0; i < MAX_CLIENTS; ++i)
@@ -140,7 +141,7 @@ void remove_from_Q(client_struct *client)
 
 void start_buffer(sbuf_t *sp, int n)
 {
-    sp->buf = malloc(n * sizeof(client_struct *));
+    sp->buf = malloc(n * sizeof(cli_linked_list *));
     for (int i = 0; i < n; ++i)
     {
         (sp->buf)[i] = NULL;
@@ -153,7 +154,7 @@ void start_buffer(sbuf_t *sp, int n)
 	pthread_cond_init(&sp->not_empty, NULL);
 }
 
-void insert_in_Buffer(sbuf_t *sp, client_struct *item)
+void insert_in_Buffer(sbuf_t *sp, cli_linked_list *item)
 {
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
 	while (sp->slots == sp->n) {		/* Wait for available slot */
@@ -166,9 +167,9 @@ void insert_in_Buffer(sbuf_t *sp, client_struct *item)
 
 }
 
-client_struct* remove_from_buffer(sbuf_t *sp)
+cli_linked_list* remove_from_buffer(sbuf_t *sp)
 {
-	client_struct *item;
+	cli_linked_list *item;
 	pthread_mutex_lock(&sp->mutex);		/* Lock the buffer */
 	while (sp->slots == 0) {		/* Wait for available item */
 		pthread_cond_wait(&sp->not_empty, &sp->mutex);
@@ -319,7 +320,7 @@ int main(int argc, char **argv)
         }
 
         // Initialize a client struct + attributes, and add it to the list of clients
-        client_struct *client = calloc(1, sizeof(client_struct));
+        cli_linked_list *client = calloc(1, sizeof(cli_linked_list));
         client->clientfd = connfd;                //CLIENT FILE DESCRIPTOR
         client->identifier = next_identifier++;    //IDENTIFIER
         client->joined = 0;
@@ -346,7 +347,7 @@ void *new_thread(void *vargp)
 	while(1)
     {
         // Remove next-to-be-serviced client from bounded buffer
-        client_struct *from_client = remove_from_buffer(&sbuf);
+        cli_linked_list *from_client = remove_from_buffer(&sbuf);
         int connfd = from_client->clientfd;
 
 		// Service client
@@ -369,7 +370,7 @@ void msg_described_client( char *msg, int connfd)
     }
 }
 
-void msg_every_client_same_room(char *msg, client_struct *from_client)
+void msg_every_client_same_room(char *msg, cli_linked_list *from_client)
 {
     int connfd; // Holds the client fd's for each client iterated throug in the client_list;
     int from_id = from_client->identifier;
@@ -401,7 +402,7 @@ void msg_every_client_same_room(char *msg, client_struct *from_client)
     pthread_mutex_unlock(&client_list_mutex);
 }
 
-void serve_request_of_client(client_struct *from_client)
+void serve_request_of_client(cli_linked_list *from_client)
 {
     int valread;
     int from_connfd = from_client->clientfd;
@@ -411,7 +412,7 @@ void serve_request_of_client(client_struct *from_client)
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
     printf("[SERVER]\n Client \"%d\" joined the server\n", from_id);
-    msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n Else ignore \n", from_connfd);
+    msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n", from_connfd);
     // JOIN ROOMNAME USERNAME
 
     //printf("[SERVER]\n\n Client \"%s\" joined the server\n", from_client->username);
