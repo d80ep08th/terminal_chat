@@ -458,7 +458,7 @@ void serve_request_of_client(cli_linked_list *from_client)
 
                                                           if (i == 2) // ROOMNAME
                                                           {
-                                                            if( strlen(p) < 2 || strlen(p) >= 20-1)
+                                                            if( strlen(p) > 2 || strlen(p) <= 20-1)
                                                             {
                                                               strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
                                                               //save roomname
@@ -474,7 +474,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                                                           else if (i == 3) // USERNAME
                                                           {
 
-                                                            if( strlen(p) < 2 || strlen(p) >= 20-1)
+                                                            if( strlen(p) > 2 || strlen(p) <= 20-1)
                                                             {
                                                               strncpy(from_client->username, p, MAX_NAME_LENGTH);
                                                               from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
@@ -486,7 +486,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                                                               break;
                                                             }
                                                           }
-                                            
+
                                   }
 
                           //if while(p) ends without discovering 4 tokens which means i = 4, then it throws error
