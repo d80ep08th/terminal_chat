@@ -446,108 +446,113 @@ void serve_request_of_client(cli_linked_list *from_client)
                 continue;
             }
 
-/*
-            for (int k = 0; k < strlen(p); ++k) // Changes every character on the first token to uppercase
-            {
-                //
-                p[k] = toupper(p[k]);
+                      if (!strcmp(p, "JOIN")) // first token is same as JOIN then dont enter
+                      {
+                                while (p) {
+                                    p = strtok(NULL, " ");
+                                    i = i + 1;          // i counts tokens divided by a ""
+                                    //JOIN ROOMNAME USERNAME
+                                    //====|========|========
+                                    //i=1, JOIN || i=2,  ROOMNAME || i=3, USERNAME
 
-            }
-*/
+                                                  if( strlen(p) < 2 || strlen(p) >= 20-1)
+                                                  {
 
-            if (!strcmp(p, "JOIN")) // first token is same as JOIN then dont enter
-            {
-                while (p) {
-                    p = strtok(NULL, " ");
-                    i = i + 1;          // i counts tokens divided by a ""
-                    //JOIN ROOMNAME USERNAME
-                    //====|========|========
-                    //i=1, JOIN || i=2,  ROOMNAME || i=3, USERNAME
+                                                          if (i == 2) // ROOMNAME
+                                                          {
+                                                            if( strlen(p) < 2 || strlen(p) >= 20-1)
+                                                            {
+                                                              strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                                                              //save roomname
+                                                              from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                                                            }
+                                                            else
+                                                            {
+                                                              printf("the roomname is too small or too large, only 20chars please"\n);
+                                                              msg_described_client("ERROR: the roomname is too small or too large, only 20chars please \n", from_connfd);
+                                                              break;
+                                                            }
+                                                          }
+                                                          else if (i == 3) // USERNAME
+                                                          {
 
-                    if( strlen(p) < 2 || strlen(p) >= 20-1)
-                    {
+                                                            if( strlen(p) < 2 || strlen(p) >= 20-1)
+                                                            {
+                                                              strncpy(from_client->username, p, MAX_NAME_LENGTH);
+                                                              from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                                                            }
+                                                            else
+                                                            {
+                                                              printf("the username is too small or too large, only 20chars please\n");
+                                                              msg_described_client("ERROR: the username is too small or too large, only 20chars please \n", from_connfd);
+                                                              break;
+                                                            }
+                                                          }
+                                                  }
 
-                            if (i == 2) // ROOMNAME
-                            {
-                                strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
-                                //save roomname
-                                from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
-                            }
-                            else if (i == 3) // USERNAME
-                            {
-                                strncpy(from_client->username, p, MAX_NAME_LENGTH);
-                                from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
-                            }
-                    }
-                    else
-                    {
-                      printf("the name is too small or too large, only 20chars please");
-                      msg_described_client(" the name is too small or too large, only 20chars please \n", from_connfd);
-                      i = 1 ;
-                    }
-                }
-                // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
-                //if while(p) ends without discovering 4 tokens which means i = 4, then it throws error
-                if (i != 4) // will be true for every number except 4, {1,2,3,5,6,....}
-                {
-                    msg_described_client("ERROR\n", from_connfd);
-                    break;
-                }
-                else  // it sends a message about room being assigned to the client
-                {
+                                  }
 
-                    printf("[SERVER]\n Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
-                    char* joined_message = concat(from_client->username, " has joined");
-                    msg_every_client_same_room(joined_message, from_client);
-                    msg_described_client(joined_message, from_client->clientfd);
-                    msg_described_client("\r\n", from_client->clientfd);
+                          //if while(p) ends without discovering 4 tokens which means i = 4, then it throws error
+                                if (i != 4) // will be true for every number except 4, {1,2,3,5,6,....}
+                                {
+                                    msg_described_client("ERROR\n", from_connfd);
+                                    break;
+                                }
+                                else  // it sends a message about room being assigned to the client
+                                {
 
-                    /*
-                    The free() function in C library allows you to release or deallocate
-                    the memory blocks which are previously allocated by calloc(), malloc()
-                    or realloc() functions. It frees up the memory blocks and returns the
-                    memory to heap. It helps freeing the memory in your program which will be available for later use
-                    */
-                    free(joined_message);
-                    from_joined = 1;    // this will make it skip the next if(!from_joined)
-                }
+                                    printf("[SERVER]\n Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
+                                    char* joined_message = concat(from_client->username, " has joined");
+                                    msg_every_client_same_room(joined_message, from_client);
+                                    msg_described_client(joined_message, from_client->clientfd);
+                                    msg_described_client("\r\n", from_client->clientfd);
 
-            }
-            else // if the client isnt connected
-            {
-                msg_described_client("ERROR\n", from_connfd);
-                break;
-            }
+                                    /*
+                                    The free() function in C library allows you to release or deallocate
+                                    the memory blocks which are previously allocated by calloc(), malloc()
+                                    or realloc() functions. It frees up the memory blocks and returns the
+                                    memory to heap. It helps freeing the memory in your program which will be available for later use
+                                    */
+                                    free(joined_message);
+                                    from_joined = 1;    // this will make it skip the next if(!from_joined)
+                                }
 
-        }
-        else // from_joined = 1, Once the client has joined a chatroom they will be able to send messages
-        {
-            printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
+                              }
+                              else // if the client isnt connected
+                              {
+                                  msg_described_client("ERROR\n", from_connfd);
+                                  break;
+                              }
 
-            // Append username and prompt to the message
-            char* username = from_client->username;
-            char* prompt = concat(username, ": ");
-            char* complete_msg = concat(prompt, msg_buffer);
+          }
+          else // from_joined = 1, Once the client has joined a chatroom they will be able to send messages
+          {
+              printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
 
-            // Send prompted message back to self and to all other clients in the same chat room
-            msg_every_client_same_room(complete_msg, from_client);
-            msg_described_client(complete_msg, from_client->clientfd);
-            msg_described_client("\r\n", from_client->clientfd);
+              // Append username and prompt to the message
+              char* username = from_client->username;
+              char* prompt = concat(username, ": ");
+              char* complete_msg = concat(prompt, msg_buffer);
 
-            /*
-            The free() function in C library allows you to release or deallocate
-            the memory blocks which are previously allocated by calloc(), malloc()
-            or realloc() functions. It frees up the memory blocks and returns the
-            memory to heap. It helps freeing the memory in your program which will be available for later use
-            */
-            free(prompt);
-            free(complete_msg);
-        }
+              // Send prompted message back to self and to all other clients in the same chat room
+              msg_every_client_same_room(complete_msg, from_client);
+              msg_described_client(complete_msg, from_client->clientfd);
+              msg_described_client("\r\n", from_client->clientfd);
+
+              /*
+              The free() function in C library allows you to release or deallocate
+              the memory blocks which are previously allocated by calloc(), malloc()
+              or realloc() functions. It frees up the memory blocks and returns the
+              memory to heap. It helps freeing the memory in your program which will be available for later use
+              */
+              free(prompt);
+              free(complete_msg);
+          }
         //the memset() function is used to set a one-byte value to a memory block
         //byte by byte. This function is useful for initialization of a memory block
         //byte by byte by a particular value.
         memset(msg_buffer, 0, sizeof(msg_buffer)); // Clear msg_buffer so previous messages don't leak into the next
 
-    }
+    } // end of the big while loop   while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
 
 }
