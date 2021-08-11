@@ -446,19 +446,19 @@ void serve_request_of_client(cli_linked_list *from_client)
             //token3 = string3
             char *p = strtok(msg_buffer_cpy, " ");
 
-            if (p == NULL || p == "/n") // Ignore blank input, or else a segfault will occur in the strcmp() below
+            if (p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
             {
                 continue;
             }
 
-            for (int k = 0; k < strlen(p); ++k) // Case insensitivity for keyword JOIN
+            for (int k = 0; k < strlen(p); ++k) // Changes every character on string p to uppercase
             {
                 //
                 p[k] = toupper(p[k]);
 
             }
 
-            if (!strcmp(p, "JOIN")) // We only care to parse the line if its a JOIN command at this point
+            if (!strcmp(p, "JOIN")) //strcmp(p, "JOIN") = 0 We only care to parse the line if its a JOIN command at this point
             {
                 while (p) {
                     p = strtok(NULL, " ");
@@ -468,6 +468,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                     {
                       //check if ROOM NAME FITS 20characters
                         strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                        //save roomname
                         from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
                     }
                     else if (i == 3) // USERNAME
