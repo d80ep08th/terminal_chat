@@ -511,7 +511,7 @@ void serve_request_of_client(cli_linked_list *from_client)
             printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
 
             // Append username and prompt to the message
-            char* rooomname = from_client->roomname;
+            char* roomname = from_client->roomname;
             char* username = from_client->username;
             char* prompt1 = concat(username, ": ");
             char* prompt2 = concat(roomname, "||");
