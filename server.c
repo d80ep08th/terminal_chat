@@ -108,9 +108,9 @@ void add_in_Q(client_struct *client)
                           {
                               client_list[i] = client;
                               //strcpy(client->username, name);
-                              printf("[Server] Client connected with identifier: %d and fd: %d\n", client->identifier, client->clientfd);
+                              printf("[SERVER]\n Client connected with identifier: %d and fd: %d\n", client->identifier, client->clientfd);
                               //sprintf(buff_out, "%s has joined\n", cli->name);
-                              //printf("[Server] Client \"%s\" joined the server\n", buff_out);
+                              //printf("[SERVER]\n\n\n Client \"%s\" joined the server\n", buff_out);
                               num_clients++;
                               break;
                           }
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
         /* Check if max clients is reached */
         if (num_clients == MAX_CLIENTS) // Reject connection if the client list is full
         {
-            printf("[Server] Max clients reached, connection rejected\n");
+            printf("[SERVER]\n Max clients reached, connection rejected\n");
             close(connfd);  // will close the connection
             continue;       /* will get out of the while loop if Max clients are reached   */
         }
@@ -352,7 +352,7 @@ void *new_thread(void *vargp)
 		// Service client
         serve_request_of_client(from_client);
         char *leave_msg = concat(from_client->username, " has left\n");
-        printf("%s has left", from_client->username);
+        printf("%s has left \n", from_client->username);
         msg_every_client_same_room(leave_msg, from_client);
         remove_from_Q(from_client);
 		close(connfd);
@@ -410,11 +410,11 @@ void serve_request_of_client(client_struct *from_client)
     int from_joined = from_client->joined;
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
-    printf("[Server] Client \"%d\" joined the server\n", from_id);
+    printf("[SERVER]\n Client \"%d\" joined the server\n", from_id);
     msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n Else ignore \n", from_connfd);
     // JOIN ROOMNAME USERNAME
 
-    //printf("[Server] Client \"%s\" joined the server\n", from_client->username);
+    //printf("[SERVER]\n\n Client \"%s\" joined the server\n", from_client->username);
     // Continously read messages from the client
     while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
     {
@@ -466,7 +466,7 @@ void serve_request_of_client(client_struct *from_client)
                 }
                 else
                 {
-                    printf("[Server] Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
+                    printf("[SERVER]\n Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
                     char* joined_message = concat(from_client->username, " has joined");
                     msg_every_client_same_room(joined_message, from_client);
                     msg_described_client(joined_message, from_client->clientfd);
@@ -486,7 +486,7 @@ void serve_request_of_client(client_struct *from_client)
         }
         else // Once the client has joined a chatroom they will be able to send messages
         {
-            printf("[Server] In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
+            printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
 
             // Append username and prompt to the message
             char* username = from_client->username;
