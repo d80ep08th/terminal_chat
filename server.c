@@ -440,12 +440,12 @@ void serve_request_of_client(cli_linked_list *from_client)
             {
                 continue;
             }
-
+/* It turns everything to uppercase
             for (int k = 0; k < strlen(p); ++k) // Case insensitivity for keyword JOIN
             {
                 p[k] = toupper(p[k]);
             }
-
+*/
             if (!strcmp(p, "JOIN")) // We only care to parse the line if its a JOIN command at this point
             {
                 while (p) {
