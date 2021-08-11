@@ -410,7 +410,7 @@ void serve_request_of_client(client_struct *from_client)
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
     printf("[Server] Client \"%d\" joined the server\n", from_id);
-    msg_described_client("JOIN ROOMNAME USERNAME", from_connfd);
+    msg_described_client("Connect to a room by entering command in this format \"JOIN {ROOMNAME} {USERNAME}\" : \n", from_connfd);
     // JOIN ROOMNAME USERNAME
 
     //printf("[Server] Client \"%s\" joined the server\n", from_client->username);
