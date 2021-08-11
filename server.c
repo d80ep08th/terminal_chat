@@ -417,6 +417,7 @@ void serve_request_of_client(cli_linked_list *from_client)
 
     printf("[SERVER]\n Client \"%d\" joined the server\n", from_id);
     msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n", from_connfd);
+
     // JOIN ROOMNAME USERNAME
 
     //printf("[SERVER]\n\n Client \"%s\" joined the server\n", from_client->username);
@@ -463,7 +464,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                     //====|========|========
                     //i=1, JOIN || i=2,  ROOMNAME || i=3, USERNAME
 
-                    if( strlen(p) < 2 || strlen(p) >= 32-1)
+                    if( strlen(p) < 2 || strlen(p) >= 20-1)
                     {
 
                             if (i == 2) // ROOMNAME
@@ -480,25 +481,35 @@ void serve_request_of_client(cli_linked_list *from_client)
                     }
                     else
                     {
-                      i = 1 ; 
+                      printf("the name is too small or too large, only 20chars please");
+                      msg_described_client(" the name is too small or too large, only 20chars please \n", from_connfd);
+                      i = 1 ;
                     }
                 }
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
-                if (i != 4) // +1 from how the while() loop above works
+                //if while(p) ends without discovering 4 tokens which means i = 4, then it throws error
+                if (i != 4) // will be true for every number except 4, {1,2,3,5,6,....}
                 {
                     msg_described_client("ERROR\n", from_connfd);
                     break;
                 }
-                else
+                else  // it sends a message about room being assigned to the client
                 {
+
                     printf("[SERVER]\n Client identified by: \"%d\" and named: \"%s\" has joined the room called: \"%s\"\n", from_id, from_client->username, from_client->roomname);
                     char* joined_message = concat(from_client->username, " has joined");
                     msg_every_client_same_room(joined_message, from_client);
                     msg_described_client(joined_message, from_client->clientfd);
                     msg_described_client("\r\n", from_client->clientfd);
 
+                    /*
+                    The free() function in C library allows you to release or deallocate
+                    the memory blocks which are previously allocated by calloc(), malloc()
+                    or realloc() functions. It frees up the memory blocks and returns the
+                    memory to heap. It helps freeing the memory in your program which will be available for later use
+                    */
                     free(joined_message);
-                    from_joined = 1;
+                    from_joined = 1;    // this will make it skip the next if(!from_joined)
                 }
 
             }
@@ -509,7 +520,7 @@ void serve_request_of_client(cli_linked_list *from_client)
             }
 
         }
-        else // Once the client has joined a chatroom they will be able to send messages
+        else // from_joined = 1, Once the client has joined a chatroom they will be able to send messages
         {
             printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
 
@@ -523,14 +534,14 @@ void serve_request_of_client(cli_linked_list *from_client)
             msg_described_client(complete_msg, from_client->clientfd);
             msg_described_client("\r\n", from_client->clientfd);
 
-            free(prompt);
-            free(complete_msg);
             /*
             The free() function in C library allows you to release or deallocate
             the memory blocks which are previously allocated by calloc(), malloc()
             or realloc() functions. It frees up the memory blocks and returns the
             memory to heap. It helps freeing the memory in your program which will be available for later use
             */
+            free(prompt);
+            free(complete_msg);
         }
         //the memset() function is used to set a one-byte value to a memory block
         //byte by byte. This function is useful for initialization of a memory block
