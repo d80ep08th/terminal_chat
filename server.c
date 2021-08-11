@@ -439,7 +439,10 @@ void serve_request_of_client(cli_linked_list *from_client)
 
             // Delimit the input string use strtok() to look for JOIN {ROOMNAME} {USERNAME}<NL>
             int i = 1;
+            char *whole_room;
             char *p = strtok(msg_buffer_cpy, " ");
+            //msg_buffer_cpy is a striing that needs to be tokenized
+            //space is its delimeter
             //first token must be JOIN
             //If its NULL , it loops again
 
@@ -456,37 +459,62 @@ void serve_request_of_client(cli_linked_list *from_client)
             if (!strcmp(p, "JOIN")) // strcmp returns a zero if both strings are equal . We only care to parse the line if its a JOIN command at this point
             {
                 while (p) {
-                    p = strtok(NULL, " ");
+
+                    p = strtok(NULL, " ");  //to get next token and if there are only two tokens then wait to recieve two more token and concat token 2 and token 3 ,
+                                            // roomname  = token2 + token3 and username = token4
+                                            if (i == 2 && p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
+                                            {
+                                                continue; // passes on this loop
+                                            }
+                                            else if (i == 2 && p != NULL)
+                                            {
+                                               p = concat(whole_room, p);
+                                               if(strlen(p) <= 20)
+                                               {
+                                                   strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                                                   from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                                               }
+                                               else{
+                                                 msg_described_client("ERROR: roomname too long\n", from_connfd);
+                                                 break;
+                                               }
+                                               p = strtok(NULL, " ");
+
+                                            }
                     i = i + 1;
 
-                    if (i == 2) // ROOMNAME
-                    {
-                        if(strlen(p) <= 20)
-                        {
-                            strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
-                            from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
-                        }
-                        else{
-                          msg_described_client("ERROR: roomname too long\n", from_connfd);
-                          break;
-                        }
-                    }
-                    else if (i == 3) // USERNAME
-                    {
-                      if(strlen(p) <= 20)
-                      {
-                              strncpy(from_client->username, p, MAX_NAME_LENGTH);
-                              from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
-                      }
-                      else{
-                        msg_described_client("ERROR: username too long\n", from_connfd);
-                        break;
-                      }
-                    }
+                                                if (i == 2) // ROOMNAME
+                                                {
+                                                    whole_room = p;
+                                                    if(strlen(p) <= 20)
+                                                    {
+                                                        strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                                                        from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                                                    }
+                                                    else{
+                                                      msg_described_client("ERROR: roomname too long\n", from_connfd);
+                                                      break;
+                                                    }
+                                                }
+                                                else if (i == 3) // USERNAME
+                                                {
+                                                  if(strlen(p) <= 20)
+                                                  {
+                                                          strncpy(from_client->username, p, MAX_NAME_LENGTH);
+                                                          from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                                                  }
+                                                  else{
+                                                    msg_described_client("ERROR: username too long\n", from_connfd);
+                                                    break;
+                                                  }
+                                                }
+
                 }
+
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
+
                     msg_described_client("ERROR: incorrect , not enough or too many inputs\n", from_connfd);
                     msg_described_client("[closes TCP conn]\n", from_connfd);
                     break;
