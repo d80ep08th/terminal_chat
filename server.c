@@ -449,7 +449,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                 p[k] = toupper(p[k]);
             }
     */
-            if (!strcmp(p, "JOIN")) // We only care to parse the line if its a JOIN command at this point
+            if (!strcmp(p, "JOIN")) // strcmp returns a zero if both strings are equal . We only care to parse the line if its a JOIN command at this point
             {
                 while (p) {
                     p = strtok(NULL, " ");
@@ -457,13 +457,27 @@ void serve_request_of_client(cli_linked_list *from_client)
 
                     if (i == 2) // ROOMNAME
                     {
-                        strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
-                        from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                        if(strlen(p) <= 20)
+                        {
+                            strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                            from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                        }
+                        else{
+                          msg_described_client("ERROR\n", from_connfd);
+                          break;
+                        }
                     }
                     else if (i == 3) // USERNAME
                     {
-                        strncpy(from_client->username, p, MAX_NAME_LENGTH);
-                        from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                      if(strlen(p) <= 20)
+                      {
+                              strncpy(from_client->username, p, MAX_NAME_LENGTH);
+                              from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                      }
+                      else{
+                        msg_described_client("ERROR\n", from_connfd);
+                        break;
+                      }
                     }
                 }
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
@@ -492,16 +506,19 @@ void serve_request_of_client(cli_linked_list *from_client)
             }
 
         }
-        else // Once the client has joined a chatroom they will be able to send messages
+        else //from_joined = 1 , Once the client has joined a chatroom they will be able to send messages
         {
             printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
 
             // Append username and prompt to the message
+            char* rooomname = from_client->roomname;
             char* username = from_client->username;
-            char* prompt = concat(username, ": ");
+            char* prompt1 = concat(username, ": ");
+            char* prompt2 = concat(roomaname, "||");
+            char* prompt = concat(prompt2, prompt1);
             char* complete_msg = concat(prompt, msg_buffer);
 
-            // Send prompted message back to self and to all other clients in the same chat room
+            // Send prompted message back to all other clients in the same chat room
             msg_every_client_same_room(complete_msg, from_client);
             msg_described_client(complete_msg, from_client->clientfd);
             msg_described_client("\r\n", from_client->clientfd);
