@@ -468,7 +468,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                                                             }
                                                             else
                                                             {
-                                                              printf("the roomname is too small or too large, only 20chars please"\n);
+                                                              printf("the roomname is too small or too large, only 20chars please\n");
                                                               msg_described_client("ERROR: the roomname is too small or too large, only 20chars please \n", from_connfd);
                                                               break;
                                                             }
