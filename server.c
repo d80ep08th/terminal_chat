@@ -425,7 +425,7 @@ void serve_request_of_client(cli_linked_list *from_client)
     while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
     {
 
-        
+
         msg_described_client("=> ", from_connfd);
         strip_CR_NL(msg_buffer); // Strip return carriage and new line from terminal entered message
         msg_buffer[MAX_LINE_LENGTH - 1] = '\0';
@@ -486,7 +486,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
-                    msg_described_client("ERROR: too many tokens\n", from_connfd);
+                    msg_described_client("ERROR: incorrect , not enough or too many inputs\n", from_connfd);
                     break;
                 }
                 else
@@ -511,7 +511,7 @@ void serve_request_of_client(cli_linked_list *from_client)
         }
         else //from_joined = 1 , Once the client has joined a chatroom they will be able to send messages
         {
-            printf("[SERVER]\n In room: \"%s\", client \"%d\" said: \"%s\"\n", from_client->roomname, from_id, msg_buffer); // Print the client message on the server side
+            printf("[SERVER]\n In room: \"%s\", client \"%d\", named \"%s\", said: \"%s\"\n", from_client->roomname,  from_id, from_client->username, msg_buffer); // Print the client message on the server side
 
             // Append username and prompt to the message
             char* roomname = from_client->roomname;
