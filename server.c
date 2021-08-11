@@ -514,7 +514,7 @@ void serve_request_of_client(cli_linked_list *from_client)
             char* rooomname = from_client->roomname;
             char* username = from_client->username;
             char* prompt1 = concat(username, ": ");
-            char* prompt2 = concat(roomaname, "||");
+            char* prompt2 = concat(roomname, "||");
             char* prompt = concat(prompt2, prompt1);
             char* complete_msg = concat(prompt, msg_buffer);
 
