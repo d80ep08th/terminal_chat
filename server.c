@@ -410,6 +410,9 @@ void serve_request_of_client(client_struct *from_client)
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
     printf("[Server] Client \"%d\" joined the server\n", from_id);
+    msg_described_client("JOIN ROOMNAME USERNAME", from_connfd);
+    // JOIN ROOMNAME USERNAME
+
     //printf("[Server] Client \"%s\" joined the server\n", from_client->username);
     // Continously read messages from the client
     while ((valread = read(from_connfd, msg_buffer, MAX_LINE_LENGTH)) > 0)
