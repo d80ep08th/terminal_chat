@@ -415,7 +415,7 @@ void serve_request_of_client(cli_linked_list *from_client)
     int from_joined = from_client->joined;
     char msg_buffer[MAX_LINE_LENGTH] = {0}; // Holds a client message
 
-    printf("[SERVER]\n Client \"%d\" joined the server\n", from_id);
+    printf("\n Client \"%d\" joined the server\n", from_id);
     msg_described_client("For telnet clients ==> Connect to a room using this format \"JOIN {ROOMNAME} {USERNAME}\" : \n", from_connfd);
 
     // JOIN ROOMNAME USERNAME
