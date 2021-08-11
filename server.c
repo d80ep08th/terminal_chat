@@ -462,30 +462,13 @@ void serve_request_of_client(cli_linked_list *from_client)
 
                     p = strtok(NULL, " ");  //to get next token and if there are only two tokens then wait to recieve two more token and concat token 2 and token 3 ,
                                             // roomname  = token2 + token3 and username = token4
-                                            if (i == 2 && p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
-                                            {
-                                                continue; // passes on this loop
-                                            }
-                                            else if (i == 2 && p != NULL)
-                                            {
-                                               p = concat(whole_room, p);
-                                               if(strlen(p) <= 20)
-                                               {
-                                                   strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
-                                                   from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
-                                               }
-                                               else{
-                                                 msg_described_client("ERROR: roomname too long\n", from_connfd);
-                                                 break;
-                                               }
-                                               p = strtok(NULL, " ");
 
-                                            }
                     i = i + 1;
 
                                                 if (i == 2) // ROOMNAME
                                                 {
                                                     whole_room = p;
+
                                                     if(strlen(p) <= 20)
                                                     {
                                                         strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
@@ -510,7 +493,39 @@ void serve_request_of_client(cli_linked_list *from_client)
                                                 }
 
                 }
+                if (i == 2 && p == NULL) // Ignore blank input, or else a segfault will occur in the strcmp() below
+                {
+                    continue; // passes on this loop
+                }
+                else if (i == 2 && p != NULL)
+                {
+                   p = concat(whole_room, p);
+                   i = i + 1 ;
+                   if(strlen(p) <= 20)
+                   {
+                       strncpy(from_client->roomname, p, MAX_ROOMNAME_LENGTH);
+                       from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
+                   }
+                   else{
+                     msg_described_client("ERROR: roomname too long\n", from_connfd);
+                     break;
+                   }
+                   p = strtok(NULL, " ");
+                   continue;
 
+                }
+                else if (i == 3)
+                {
+                  if(strlen(p) <= 20)
+                  {
+                          strncpy(from_client->username, p, MAX_NAME_LENGTH);
+                          from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
+                  }
+                  else{
+                    msg_described_client("ERROR: username too long\n", from_connfd);
+                    break;
+                  }
+                }
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
