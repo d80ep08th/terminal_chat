@@ -399,7 +399,7 @@ void *thread(void *vargp)
 
 		// Service client
         doit(from_client);
-        char *leave_msg = concat(from_client->username, " has left");
+        char *leave_msg = concat(from_client->username, " has left\n");
         send_msg_all(leave_msg, from_client);
         client_remove(from_client);
 		close(connfd);
