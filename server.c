@@ -463,7 +463,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                             from_client->roomname[MAX_ROOMNAME_LENGTH - 1] = '\0';
                         }
                         else{
-                          msg_described_client("ERROR\n", from_connfd);
+                          msg_described_client("ERROR: roomname too long\n", from_connfd);
                           break;
                         }
                     }
@@ -475,7 +475,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                               from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
                       }
                       else{
-                        msg_described_client("ERROR\n", from_connfd);
+                        msg_described_client("ERROR: username too long\n", from_connfd);
                         break;
                       }
                     }
@@ -483,7 +483,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                 // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
-                    msg_described_client("ERROR\n", from_connfd);
+                    msg_described_client("ERROR: too many tokens\n", from_connfd);
                     break;
                 }
                 else
