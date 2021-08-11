@@ -570,8 +570,18 @@ void doit(client_struct *from_client)
 
             free(prompt);
             free(complete_msg);
+            /*
+            The free() function in C library allows you to release or deallocate
+            the memory blocks which are previously allocated by calloc(), malloc()
+            or realloc() functions. It frees up the memory blocks and returns the
+            memory to heap. It helps freeing the memory in your program which will be available for later use
+            */
         }
+        //the memset() function is used to set a one-byte value to a memory block
+        //byte by byte. This function is useful for initialization of a memory block
+        //byte by byte by a particular value.
         memset(msg_buffer, 0, sizeof(msg_buffer)); // Clear msg_buffer so previous messages don't leak into the next
+
     }
 
 }
