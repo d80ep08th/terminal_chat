@@ -210,7 +210,7 @@ int main(int argc, char **argv)
     if (argc > 2)
     {
         printf("error: server requires a single argument for the desired port number\n");
-        printf("usage: ./chat_server [port]\n");
+        printf("usage: ./server [port]\n");
         exit(EXIT_FAILURE);
     }
     unsigned int port;
@@ -356,6 +356,7 @@ void *new_thread(void *vargp)
         printf("%s has left \n", from_client->username);
         msg_every_client_same_room(leave_msg, from_client);
         remove_from_Q(from_client);
+        //if the client is the last client in the room then delete the room
 		close(connfd);
 	}
 
@@ -380,9 +381,12 @@ void msg_every_client_same_room(char *msg, cli_linked_list *from_client)
     pthread_mutex_lock(&client_list_mutex);
     for (int i = 0; i < MAX_CLIENTS; ++i)
     {
-        if ((client_list[i] != NULL)
-            && (client_list[i]->identifier != from_id)
-            && (!strcmp(client_list[i]->roomname, from_roomname))) // Looking for a non-NULL slots, don't send to the client that sent it, and only send to clients from the same room
+
+                  // Looking for a non-NULL slots, don't send to the client that sent it
+                  //, and only send to clients from the same room
+
+        if (( client_list[i] != NULL ) && ( client_list[i]->identifier != from_id ) && ( !strcmp(client_list[i]->roomname, from_roomname) ))
+
         {
             connfd = client_list[i]->clientfd;
 
@@ -459,7 +463,7 @@ void serve_request_of_client(cli_linked_list *from_client)
                         from_client->roomname[MAX_NAME_LENGTH - 1] = '\0';
                     }
                 }
-                // If after parsing the JOIN command, there are not 3 tokens (including JOIN) something has gone wrong..
+                // If after parsing the JOIN command, there are more than 3 tokens (including JOIN) something has gone wrong..
                 if (i != 4) // +1 from how the while() loop above works
                 {
                     msg_described_client("ERROR\n", from_connfd);
